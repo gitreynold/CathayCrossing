@@ -3,7 +3,7 @@
 Third-person, Animal Crossing-inspired office hangout with light tasks and decor placement.
 
 ## Unity Version
-- `6000.0.67f1`
+- `6000.3.6f1`
 
 ## MVP Features
 - Cozy third-person controller
@@ -21,7 +21,7 @@ Third-person, Animal Crossing-inspired office hangout with light tasks and decor
 - `Assets/Art` / `Assets/Materials` / `Assets/Audio` / `Assets/UI`
 
 ## Scene Setup (Office MVP)
-1. Open the project in Unity `6000.0.67f1`.
+1. Open the project in Unity `6000.3.6f1`.
 2. Create a new scene `Office.unity` in `Assets/Scenes` and save.
 3. Create a `Game` object and attach `GameBootstrap`.
 4. Create a `Player` object and add:
@@ -47,13 +47,16 @@ Third-person, Animal Crossing-inspired office hangout with light tasks and decor
 - Task JSON: `Assets/Resources/Tasks/tasks.json`
 
 ## WebGL Build (One Click)
-- Use Unity menu: `Build -> Build WebGL`
-- Output folder: `Builds/WebGL`
+- Use Unity menu: `Build -> Build WebGL (Docs)`
+- Output folder: `docs/`
 
-## Deployment Flow
-1. Build WebGL from Unity.
-2. Upload the `Builds/WebGL` folder to a static host.
-3. Ensure the host serves `.wasm` with the correct MIME type.
+## GitHub Pages Deployment
+1. Build WebGL from Unity (output to `docs/`).
+2. In GitHub repo: `Settings -> Pages`.
+3. `Source` = `Deploy from a branch`.
+4. `Branch` = `main`, `Folder` = `docs/`.
+5. Wait for Pages to publish.
 
 ## Notes
+- `Brotli` + `Decompression Fallback` is enabled by the build menu to avoid blank pages on hosts without brotli.
 - Unity will generate additional settings files once opened.

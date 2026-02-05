@@ -5,13 +5,15 @@ using UnityEngine;
 
 public static class BuildWebGL
 {
-    [MenuItem("Build/Build WebGL")]
+    [MenuItem("Build/Build WebGL (Docs)")]
     public static void Build()
     {
-        string buildPath = "Builds/WebGL";
+        string buildPath = "docs";
         if (!Directory.Exists(buildPath)) Directory.CreateDirectory(buildPath);
 
         EditorUserBuildSettings.SwitchActiveBuildTarget(BuildTargetGroup.WebGL, BuildTarget.WebGL);
+        PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Brotli;
+        PlayerSettings.WebGL.decompressionFallback = true;
 
         BuildPlayerOptions options = new BuildPlayerOptions
         {
