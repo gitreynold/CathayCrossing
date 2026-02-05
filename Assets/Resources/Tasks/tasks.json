@@ -1,0 +1,20 @@
+{
+  "tasks": [
+    {
+      "id": "task_01",
+      "title": "Deliver the Stapler",
+      "description": "Pick up the stapler from the supply shelf and bring it to Alex at the printer.",
+      "requiredItemId": "stapler",
+      "targetId": "npc_alex",
+      "startNpcId": "npc_reception"
+    },
+    {
+      "id": "task_02",
+      "title": "Refill the Coffee",
+      "description": "Grab the coffee beans and refill the coffee machine.",
+      "requiredItemId": "coffee_beans",
+      "targetId": "object_coffee",
+      "startNpcId": "npc_alex"
+    }
+  ]
+}

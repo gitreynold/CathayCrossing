@@ -1,0 +1,28 @@
+{
+  "dialogues": [
+    {
+      "id": "npc_reception",
+      "speakerName": "Receptionist",
+      "lines": [
+        "Morning. The printer is jammed again.",
+        "Can you bring Alex the stapler from the supply shelf?"
+      ]
+    },
+    {
+      "id": "npc_alex",
+      "speakerName": "Alex",
+      "lines": [
+        "Thanks. We can get this report out on time now.",
+        "There is a sticky note on your desk with the next task."
+      ]
+    },
+    {
+      "id": "object_coffee",
+      "speakerName": "Coffee Machine",
+      "lines": [
+        "It smells great, but it is empty.",
+        "Someone needs to refill the beans."
+      ]
+    }
+  ]
+}
