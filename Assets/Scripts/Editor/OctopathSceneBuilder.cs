@@ -184,28 +184,56 @@ namespace CathayCrossing.HD2D.EditorTools
                 new Vector3(0.06f, 0.06f, 0.06f), mats.Brass);
         }
 
-        // ─── Furniture: 13 vertical desk columns running along Z axis ─────────
-        // Layout: 13 columns spaced 1.5m on X (centered, so col 6 is at X=0).
-        // Chairs alternate sides per column (even = east, odd = west) so chairs
-        // pair up back-to-back in odd-even gaps; even-odd gaps are walking aisles.
+        // ─── Furniture: merged desk groups running along Z axis ───────────────
+        // Underlying grid is still 13 column slots spaced 4m on X (col 6 at X=0).
+        // Adjacent slots that previously had a chair-less walking aisle between
+        // them are merged into one wide communal desk with chairs on both sides.
+        // Result: col 0 stands alone (chair on east), then six double-wide desks
+        // covering pairs (1,2) (3,4) (5,6) (7,8) (9,10) (11,12). Every aisle is
+        // a workspace with chairs facing each other — no empty walking aisles.
         const int DeskColumns = 13;
-        const float DeskColumnSpacingX = 4.0f;
+        const float DeskColumnSpacingX = 4.0f; // legacy group-center step; still controls col 0 + pair midpoints
         // Desks slide up against the back wall (HalfZ = 20). 21m length preserved.
         const float DeskZStart = -1.2f;
         const float DeskZEnd   = 19.8f;
+        const float DeskHalfWidthX = 0.6f; // half of the original 1.2m column desk width
+        // Distance between the two columns *inside* a merged pair. Smaller = narrower
+        // communal desk. Must stay above ~0.9m so monitors (offset 0.4 from each col
+        // centre) don't overlap back-to-back in the middle of the merged surface.
+        const float MergedPairInternalSpacing = 1.5f;
 
-        static float ColumnX(int i) => (i - (DeskColumns - 1) * 0.5f) * DeskColumnSpacingX;
+        // Non-uniform layout: col 0 sits at the original far-west position; merged
+        // pairs (cols 1+2, 3+4, …, 11+12) keep their old midpoint X but their two
+        // columns are pulled toward each other so each merged desk is only
+        // (1.2 + MergedPairInternalSpacing)m wide instead of 5.2m.
+        static float ColumnX(int i)
+        {
+            if (i == 0)
+                return (0 - (DeskColumns - 1) * 0.5f) * DeskColumnSpacingX;
+
+            int pairIdx = (i + 1) / 2;                      // 1..6
+            bool isLeft = (i % 2 == 1);
+            // Old midpoint between cols (2k-1) and (2k) under uniform 4m spacing
+            float pairCentre = (2f * pairIdx - 0.5f - (DeskColumns - 1) * 0.5f) * DeskColumnSpacingX;
+            return pairCentre + (isLeft ? -MergedPairInternalSpacing * 0.5f
+                                        :  MergedPairInternalSpacing * 0.5f);
+        }
 
         static void BuildOfficeFurniture(Transform parent, MaterialKit mats)
         {
             var fRoot = new GameObject("Furniture").transform;
             fRoot.SetParent(parent, false);
 
-            for (int i = 0; i < DeskColumns; i++)
+            // Edge: col 0 alone — single desk, chair on east only
+            BuildDeskGroup(fRoot, mats, leftCol: 0, rightCol: 0,
+                chairWest: false, chairEast: true);
+
+            // Six merged double-wide desks across former walking aisles
+            int[] mergedLefts = { 1, 3, 5, 7, 9, 11 };
+            foreach (int leftCol in mergedLefts)
             {
-                float colX = ColumnX(i);
-                bool chairEast = (i % 2 == 0);
-                BuildDeskColumn(fRoot, mats, colX, chairEast, columnIndex: i);
+                BuildDeskGroup(fRoot, mats, leftCol: leftCol, rightCol: leftCol + 1,
+                    chairWest: true, chairEast: true);
             }
 
             // Whiteboard on right wall, mounted high
@@ -229,38 +257,53 @@ namespace CathayCrossing.HD2D.EditorTools
             Object.DestroyImmediate(jug.GetComponent<Collider>());
         }
 
-        static void BuildDeskColumn(Transform parent, MaterialKit mats, float colX, bool chairEast, int columnIndex)
+        // Build one desk group: a single merged desk top spanning [leftCol..rightCol]
+        // with workstations on its west and/or east side. Pass leftCol == rightCol
+        // for a single-slot desk (edge column).
+        static void BuildDeskGroup(Transform parent, MaterialKit mats, int leftCol, int rightCol,
+            bool chairWest, bool chairEast)
         {
-            const float deskWidth = 1.2f;     // X extent (doubled — wider desks)
+            float westX = ColumnX(leftCol)  - DeskHalfWidthX;
+            float eastX = ColumnX(rightCol) + DeskHalfWidthX;
+            float midX  = (westX + eastX) * 0.5f;
+            float widthX = eastX - westX;
             float lengthZ = DeskZEnd - DeskZStart;
             float midZ = (DeskZStart + DeskZEnd) * 0.5f;
 
-            // Desk top
-            CreateBox(parent, $"Col{columnIndex}_DeskTop",
-                new Vector3(colX, 0.75f, midZ),
-                new Vector3(deskWidth, 0.06f, lengthZ), mats.DeskTop);
+            string groupName = leftCol == rightCol ? $"Col{leftCol}" : $"Col{leftCol}_{rightCol}";
 
-            // Legs along length
+            // Single merged desk top covering both slots
+            CreateBox(parent, $"{groupName}_DeskTop",
+                new Vector3(midX, 0.75f, midZ),
+                new Vector3(widthX, 0.06f, lengthZ), mats.DeskTop);
+
+            // Legs at the outer edges only (no interior legs splitting the merged surface)
             int legPairs = 4;
             for (int li = 0; li <= legPairs; li++)
             {
                 float lz = Mathf.Lerp(DeskZStart + 0.15f, DeskZEnd - 0.15f, (float)li / legPairs);
                 CreateBox(parent, "Leg",
-                    new Vector3(colX - deskWidth * 0.5f + 0.05f, 0.37f, lz),
+                    new Vector3(westX + 0.05f, 0.37f, lz),
                     new Vector3(0.06f, 0.74f, 0.06f), mats.MonitorBezel);
                 CreateBox(parent, "Leg",
-                    new Vector3(colX + deskWidth * 0.5f - 0.05f, 0.37f, lz),
+                    new Vector3(eastX - 0.05f, 0.37f, lz),
                     new Vector3(0.06f, 0.74f, 0.06f), mats.MonitorBezel);
             }
 
-            // 3 workstations per column, evenly spaced along Z
+            // 3 workstations along Z per occupied side
             int seats = 3;
             float spacingZ = lengthZ / seats;
-            System.Random rng = new System.Random(columnIndex * 31 + 7);
+            System.Random rngWest = new System.Random(leftCol * 31 + 7);
+            System.Random rngEast = new System.Random(rightCol * 31 + 13);
             for (int i = 0; i < seats; i++)
             {
                 float z = DeskZStart + spacingZ * (i + 0.5f);
-                BuildColumnWorkstation(parent, mats, new Vector3(colX, 0, z), chairEast, rng);
+                if (chairWest)
+                    BuildColumnWorkstation(parent, mats,
+                        new Vector3(ColumnX(leftCol), 0, z), chairEast: false, rngWest);
+                if (chairEast)
+                    BuildColumnWorkstation(parent, mats,
+                        new Vector3(ColumnX(rightCol), 0, z), chairEast: true, rngEast);
             }
         }
 
@@ -371,13 +414,13 @@ namespace CathayCrossing.HD2D.EditorTools
             // Open laptop on column 7 middle workstation desk (z=9.3)
             BuildLaptop(dRoot, mats, new Vector3(ColumnX(7), 0.81f, 9.3f), 14f);
 
-            // Backpack on the floor in a walking aisle (between cols 5 and 6) at the front
-            float aisleX = (ColumnX(5) + ColumnX(6)) * 0.5f;
+            // Backpack on the floor at the front of a chair aisle (between merged 3-4 and 5-6 groups)
+            float backpackX = (ColumnX(4) + ColumnX(5)) * 0.5f;
             CreateBox(dRoot, "Backpack",
-                new Vector3(aisleX, 0.32f, -3f),
+                new Vector3(backpackX, 0.32f, -3f),
                 new Vector3(0.30f, 0.65f, 0.40f), mats.BagFabric);
             CreateBox(dRoot, "BackpackStrap",
-                new Vector3(aisleX, 0.55f, -3.18f),
+                new Vector3(backpackX, 0.55f, -3.18f),
                 new Vector3(0.06f, 0.20f, 0.06f), mats.MonitorBezel);
 
             // Jacket draped over col 6's east chair backrest at workstation z=2.3
@@ -521,9 +564,9 @@ namespace CathayCrossing.HD2D.EditorTools
         {
             var player = new GameObject("Player");
             player.transform.SetParent(parent, false);
-            // Spawn in the central walking aisle (between cols 5 and 6) at the front
-            // of the room so the player isn't stuck inside a desk.
-            float aisleX = (ColumnX(5) + ColumnX(6)) * 0.5f;
+            // Spawn in the chair aisle nearest room center (between merged 5-6 and 7-8 groups)
+            // at the front of the room so the player isn't stuck inside a desk.
+            float aisleX = (ColumnX(6) + ColumnX(7)) * 0.5f;
             player.transform.position = new Vector3(aisleX, 0, DeskZStart - 0.5f);
             player.tag = "Player";
 
