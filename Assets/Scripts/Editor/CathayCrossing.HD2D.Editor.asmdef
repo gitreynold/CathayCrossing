@@ -1,0 +1,20 @@
+{
+    "name": "CathayCrossing.HD2D.Editor",
+    "rootNamespace": "CathayCrossing.HD2D.EditorTools",
+    "references": [
+        "CathayCrossing.HD2D.Runtime",
+        "Unity.RenderPipelines.Universal.Runtime",
+        "Unity.RenderPipelines.Core.Runtime"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
