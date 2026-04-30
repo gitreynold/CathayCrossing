@@ -1,4 +1,4 @@
-# CathayCrossing 🏝️✈️
+# 行應科友會 🏝️✈️
 
 > 一個用 Unity 打造的 **HD-2D 辦公室 diorama**，靈感來自《Octopath Traveler》的傾斜鏡頭與 tilt-shift 模型感。
 > 用 WASD 在像素小人裡晃晃，把上班族的格子間變成《八方旅人》的冒險場景吧。
