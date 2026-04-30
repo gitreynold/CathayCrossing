@@ -1,0 +1,16 @@
+{
+    "name": "CathayCrossing.MiniGames.GameRoom",
+    "rootNamespace": "CathayCrossing.MiniGames.GameRoom",
+    "references": [
+        "CathayCrossing.Core"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
