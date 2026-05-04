@@ -3,10 +3,11 @@ using UnityEngine;
 namespace CathayCrossing.Bootstrap
 {
     /// <summary>
-    /// Spawns the persistent infra GameObject (SceneSwitcher + OfficeDoorSpawner)
-    /// once when the game starts, before any scene loads. This avoids the need
-    /// for a hand-edited Bootstrap.unity scene file — the user just plays the
-    /// office scene normally and the gateway logic boots itself.
+    /// Spawns the persistent infra GameObject (SceneSwitcher + OfficeDoorSpawner
+    /// + OfficePlayerSpawner) once when the game starts, before any scene loads.
+    /// This avoids the need for a hand-edited Bootstrap.unity scene file — the
+    /// user just plays the office scene normally and the gateway logic boots
+    /// itself.
     /// </summary>
     public static class GameInfraBootstrap
     {
@@ -21,7 +22,8 @@ namespace CathayCrossing.Bootstrap
             Object.DontDestroyOnLoad(infra);
             infra.AddComponent<SceneSwitcher>();
             infra.AddComponent<OfficeDoorSpawner>();
-            Debug.Log($"[{InfraName}] Spawned. SceneSwitcher + OfficeDoorSpawner online.");
+            infra.AddComponent<OfficePlayerSpawner>();
+            Debug.Log($"[{InfraName}] Spawned. SceneSwitcher + OfficeDoorSpawner + OfficePlayerSpawner online.");
         }
     }
 }

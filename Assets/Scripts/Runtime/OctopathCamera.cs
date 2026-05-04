@@ -48,6 +48,15 @@ namespace CathayCrossing.HD2D
             _cam.fieldOfView = fov;
             _cam.nearClipPlane = 0.1f;
             _cam.farClipPlane = 200f;
+            SyncTargetsFromFields();
+        }
+
+        /// Re-seed the smoothing targets from the public yaw/pitch/distance
+        /// fields. Call this after a script writes those fields post-Awake,
+        /// otherwise LateUpdate will drag the camera back to the values
+        /// captured on the first frame.
+        public void SyncTargetsFromFields()
+        {
             _yawTarget = yaw;
             _pitchTarget = pitch;
             _distTarget = distance;

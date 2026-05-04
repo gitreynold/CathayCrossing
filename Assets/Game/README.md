@@ -11,9 +11,12 @@ Assets/Game/
 │                   # asmdef: CathayCrossing.Bootstrap ── 只 ref Core
 │                   # 透過 RuntimeInitializeOnLoadMethod 自動啟動，不需要 Bootstrap scene
 │
+├── Characters/     # asmdef: CathayCrossing.Characters ── 人物組
+│                   # 模組化 SkinnedMesh + Humanoid 骨架；可換髮型/衣著/五官
+│                   # 詳見 Characters/README.md
+│
 │  ── 以下為各組進來時自行建立 ──
 ├── Map/            # asmdef: CathayCrossing.Map        ── 地圖組
-├── Characters/     # asmdef: CathayCrossing.Characters ── 人物組
 ├── Furniture/      # asmdef: CathayCrossing.Furniture  ── 家具/物品組
 └── MiniGames/
     ├── Shared/     # asmdef: CathayCrossing.MiniGames.Shared

@@ -1,10 +1,8 @@
 {
-    "name": "CathayCrossing.Bootstrap",
-    "rootNamespace": "CathayCrossing.Bootstrap",
+    "name": "CathayCrossing.Characters",
+    "rootNamespace": "CathayCrossing.Characters",
     "references": [
-        "CathayCrossing.Core",
-        "CathayCrossing.Characters",
-        "CathayCrossing.HD2D.Runtime"
+        "CathayCrossing.Core"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
