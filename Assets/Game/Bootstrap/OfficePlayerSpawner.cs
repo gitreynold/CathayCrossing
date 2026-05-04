@@ -94,6 +94,8 @@ namespace CathayCrossing.Bootstrap
 
             SceneManager.MoveGameObjectToScene(player, scene);
 
+            OfficeRoomSetup.Apply(scene);
+
             ConfigureCamera(scene, player.transform);
 
             Debug.Log($"[OfficePlayerSpawner] Player spawned at {spawnPos} in '{scene.name}'. WASD/arrows to move, Shift to run. Tune face on the ProceduralCharacter component under {PlayerObjectName}/SpriteRoot/Body.");

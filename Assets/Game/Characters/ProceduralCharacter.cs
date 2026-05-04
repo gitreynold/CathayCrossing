@@ -114,9 +114,9 @@ namespace CathayCrossing.Characters
             _skull.localScale = new Vector3(0.21f * headSize,
                                             0.24f * headSize,
                                             0.22f * headSize);
-            _hairCrown.localScale = new Vector3(0.225f * headSize,
-                                                0.13f  * headSize,
-                                                0.225f * headSize);
+            _hairCrown.localScale = new Vector3(0.215f * headSize,
+                                                0.110f * headSize,
+                                                0.215f * headSize);
 
             // Eyes — three-layer (white / iris / pupil), recessed slightly into head.
             float ex = 0.04f * eyeSpacing;
@@ -301,34 +301,43 @@ namespace CathayCrossing.Characters
 
         void BuildHair()
         {
-            // Crown cap — slightly flattened sphere covering the top half of the skull.
+            // Spiky cut: low-profile crown cap + six tilted spikes + sideburns.
+            // Forehead is exposed (no bangs) and there's no back-of-head dome.
             _hairCrown = MakePart("Hair_Crown", PrimitiveType.Sphere,
-                new Vector3(0f, HEAD_Y + 0.045f, -0.010f), new Vector3(0.225f, 0.13f, 0.225f),
+                new Vector3(0f, HEAD_Y + 0.060f, -0.005f), new Vector3(0.215f, 0.110f, 0.215f),
                 ColorRole.Hair).transform;
 
-            // Bangs — three small capsules forming a fringe.
-            MakePart("Hair_BangL", PrimitiveType.Capsule,
-                new Vector3(-0.060f, HEAD_Y + 0.075f, HEAD_FRONT_Z - 0.005f),
-                new Vector3(0.045f, 0.040f, 0.045f), ColorRole.Hair);
-            MakePart("Hair_BangC", PrimitiveType.Capsule,
-                new Vector3(0f, HEAD_Y + 0.080f, HEAD_FRONT_Z - 0.002f),
-                new Vector3(0.050f, 0.045f, 0.050f), ColorRole.Hair);
-            MakePart("Hair_BangR", PrimitiveType.Capsule,
-                new Vector3( 0.060f, HEAD_Y + 0.075f, HEAD_FRONT_Z - 0.005f),
-                new Vector3(0.045f, 0.040f, 0.045f), ColorRole.Hair);
+            void Spike(string nm, Vector3 pos, Vector3 scale, float pitch, float roll)
+            {
+                var go = MakePart(nm, PrimitiveType.Capsule, pos, scale, ColorRole.Hair);
+                go.transform.localRotation = Quaternion.Euler(pitch, 0f, roll);
+            }
 
-            // Side hair / temple
+            // Front spikes — three capsules leaning forward off the hairline.
+            Spike("Hair_SpikeL_F", new Vector3(-0.060f, HEAD_Y + 0.140f, HEAD_FRONT_Z - 0.030f),
+                                   new Vector3(0.038f, 0.075f, 0.038f), -22f, -25f);
+            Spike("Hair_SpikeC_F", new Vector3( 0.000f, HEAD_Y + 0.150f, HEAD_FRONT_Z - 0.035f),
+                                   new Vector3(0.040f, 0.080f, 0.040f), -18f,   0f);
+            Spike("Hair_SpikeR_F", new Vector3( 0.060f, HEAD_Y + 0.140f, HEAD_FRONT_Z - 0.030f),
+                                   new Vector3(0.038f, 0.075f, 0.038f), -22f,  25f);
+
+            // Side spikes — tilt outward from above the temples.
+            Spike("Hair_SpikeL_M", new Vector3(-0.085f, HEAD_Y + 0.130f, -0.025f),
+                                   new Vector3(0.036f, 0.070f, 0.036f),  8f, -32f);
+            Spike("Hair_SpikeR_M", new Vector3( 0.085f, HEAD_Y + 0.130f, -0.025f),
+                                   new Vector3(0.036f, 0.070f, 0.036f),  8f,  32f);
+
+            // Back spike — single tuft sticking up at the rear.
+            Spike("Hair_SpikeC_B", new Vector3( 0.000f, HEAD_Y + 0.135f, -0.080f),
+                                   new Vector3(0.040f, 0.080f, 0.040f),  22f,   0f);
+
+            // Sideburns — short tufts in front of the ears.
             MakePart("Hair_SideL", PrimitiveType.Capsule,
-                new Vector3(-0.105f, HEAD_Y + 0.030f, -0.005f),
-                new Vector3(0.048f, 0.075f, 0.060f), ColorRole.Hair);
+                new Vector3(-0.108f, HEAD_Y - 0.020f, 0.015f),
+                new Vector3(0.028f, 0.055f, 0.034f), ColorRole.Hair);
             MakePart("Hair_SideR", PrimitiveType.Capsule,
-                new Vector3( 0.105f, HEAD_Y + 0.030f, -0.005f),
-                new Vector3(0.048f, 0.075f, 0.060f), ColorRole.Hair);
-
-            // Back of head
-            MakePart("Hair_Back", PrimitiveType.Sphere,
-                new Vector3(0f, HEAD_Y + 0.020f, -0.085f),
-                new Vector3(0.215f, 0.150f, 0.110f), ColorRole.Hair);
+                new Vector3( 0.108f, HEAD_Y - 0.020f, 0.015f),
+                new Vector3(0.028f, 0.055f, 0.034f), ColorRole.Hair);
         }
 
         void BuildFace()
