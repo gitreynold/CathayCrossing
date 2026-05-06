@@ -9,10 +9,10 @@ namespace CathayCrossing.Bootstrap
     /// Spawns a controllable Player at runtime when the office scene loads.
     /// Position is the geometric center of every Desk_*/Chair_* renderer
     /// already placed in the scene, projected onto the floor (y = 0).
-    /// Visual is a <see cref="ProceduralCharacter"/> — primitive humanoid
-    /// with parameter-driven face features, used as a placeholder until real
-    /// character art arrives. Material is cloned from an existing scene
-    /// material so the URP/Lit shader survives WebGL build stripping.
+    /// Visual loads <c>Resources/Characters/tripo_man_1</c> FBX when present,
+    /// otherwise falls back to a <see cref="ProceduralCharacter"/> built from
+    /// primitives. Material is cloned from an existing scene material so the
+    /// URP/Lit shader survives WebGL build stripping.
     /// </summary>
     public class OfficePlayerSpawner : MonoBehaviour
     {
@@ -23,6 +23,7 @@ namespace CathayCrossing.Bootstrap
         public float spawnY = 0f;
 
         const string PlayerObjectName = "__OfficePlayer";
+        const string CharacterModelResourcePath = "Characters/tripo_man_1";
 
         void OnEnable()
         {
@@ -84,13 +85,19 @@ namespace CathayCrossing.Bootstrap
             var body = new GameObject("Body");
             body.transform.SetParent(spriteRoot.transform, false);
 
-            Material baseMat = FindLoadedMaterial(scene);
-            var procedural = body.AddComponent<ProceduralCharacter>();
-            procedural.Build(baseMat);
+            GameObject fbxVisual = TryInstantiateCharacterModel(body.transform);
+            if (fbxVisual == null)
+            {
+                Material baseMat = FindLoadedMaterial(scene);
+                var procedural = body.AddComponent<ProceduralCharacter>();
+                procedural.Build(baseMat);
+            }
 
             var ctrl = player.AddComponent<OctopathPlayerController>();
             ctrl.spriteRoot = spriteRoot.transform;
-            ctrl.spriteVisual = body.transform;
+            // Bob is a fake walk-cue for the primitive procedural body; a real
+            // skinned mesh should be driven by an Animator, not a vertical bob.
+            ctrl.spriteVisual = fbxVisual != null ? null : body.transform;
 
             SceneManager.MoveGameObjectToScene(player, scene);
 
@@ -98,10 +105,26 @@ namespace CathayCrossing.Bootstrap
 
             ConfigureCamera(scene, player.transform);
 
-            Debug.Log($"[OfficePlayerSpawner] Player spawned at {spawnPos} in '{scene.name}'. WASD/arrows to move, Shift to run. Tune face on the ProceduralCharacter component under {PlayerObjectName}/SpriteRoot/Body.");
+            string visualKind = fbxVisual != null ? "tripo_man_1 FBX" : "ProceduralCharacter";
+            Debug.Log($"[OfficePlayerSpawner] Player ({visualKind}) spawned at {spawnPos} in '{scene.name}'. WASD/arrows to move, Shift to run.");
         }
 
         // ─── Helpers ────────────────────────────────────────────────────────
+        static GameObject TryInstantiateCharacterModel(Transform parent)
+        {
+            var prefab = Resources.Load<GameObject>(CharacterModelResourcePath);
+            if (prefab == null)
+            {
+                Debug.LogWarning($"[OfficePlayerSpawner] Character model not found at Resources/{CharacterModelResourcePath}. Falling back to ProceduralCharacter.");
+                return null;
+            }
+            var visual = Instantiate(prefab, parent);
+            visual.name = "Visual";
+            visual.transform.localPosition = Vector3.zero;
+            visual.transform.localRotation = Quaternion.identity;
+            return visual;
+        }
+
         static Material FindLoadedMaterial(Scene scene)
         {
             foreach (var root in scene.GetRootGameObjects())
