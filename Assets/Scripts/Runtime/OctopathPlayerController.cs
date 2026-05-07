@@ -14,13 +14,24 @@ namespace CathayCrossing.HD2D
 
         [Header("Refs")]
         public Transform spriteRoot;
-        [Tooltip("Quad/visual that bobs up and down while walking. Usually the CharacterSprite quad.")]
+        [Tooltip("Optional. Bobs up/down while moving — used as a fake walk-cue " +
+                 "for the ProceduralCharacter (primitive body). Leave null when " +
+                 "an Animator is driving real walk/idle clips.")]
         public Transform spriteVisual;
+        [Tooltip("Optional. Real animator on the character mesh (Tencent rigged " +
+                 "FBX + PlayerAnimator.controller). Set by OfficePlayerSpawner. " +
+                 "When present, drives a Speed float and a Wave trigger; the " +
+                 "vertical bob is suppressed.")]
+        public Animator animator;
 
-        [Header("Walk bob animation")]
+        [Header("Walk bob animation (procedural fallback)")]
         public float bobAmplitude = 0.07f;
         [Tooltip("Step bumps per second when moving at full walk speed.")]
         public float stepsPerSecond = 6f;
+
+        [Header("Greeting")]
+        [Tooltip("Key that fires the 'Wave' trigger on the Animator.")]
+        public Key greetKey = Key.H;
 
         [Header("Collision")]
         public float colliderHeight = 1.6f;
@@ -35,6 +46,10 @@ namespace CathayCrossing.HD2D
         float _baseSpriteY = float.NaN;
         CharacterController _controller;
         float _verticalVelocity;
+
+        // Cached Animator parameter IDs — string lookups every frame add up.
+        static readonly int SpeedHash = Animator.StringToHash("Speed");
+        static readonly int WaveHash  = Animator.StringToHash("Wave");
 
         void Reset()
         {
@@ -93,7 +108,29 @@ namespace CathayCrossing.HD2D
                 spriteRoot.rotation = Quaternion.Slerp(spriteRoot.rotation, targetRot, rotationSpeed * Time.deltaTime);
             }
 
+            UpdateAnimator();
             UpdateWalkBob();
+        }
+
+        // Drive the rigged-character Animator. The procedural body has no
+        // animator and is driven by the bob below instead.
+        void UpdateAnimator()
+        {
+            if (animator == null) return;
+            animator.SetFloat(SpeedHash, _velocity.magnitude);
+
+            var kb = Keyboard.current;
+            if (kb != null && kb[greetKey].wasPressedThisFrame)
+            {
+                animator.SetTrigger(WaveHash);
+            }
+        }
+
+        public void Wave()
+        {
+            // Public hook so UI buttons / NPC interactions can also trigger Wave
+            // without simulating a key press.
+            if (animator != null) animator.SetTrigger(WaveHash);
         }
 
         void UpdateWalkBob()

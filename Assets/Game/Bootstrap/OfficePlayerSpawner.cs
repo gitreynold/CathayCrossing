@@ -9,10 +9,18 @@ namespace CathayCrossing.Bootstrap
     /// Spawns a controllable Player at runtime when the office scene loads.
     /// Position is the geometric center of every Desk_*/Chair_* renderer
     /// already placed in the scene, projected onto the floor (y = 0).
-    /// Visual loads <c>Resources/Characters/tripo_man_1</c> FBX when present,
-    /// otherwise falls back to a <see cref="ProceduralCharacter"/> built from
-    /// primitives. Material is cloned from an existing scene material so the
-    /// URP/Lit shader survives WebGL build stripping.
+    ///
+    /// Visual loading order (first hit wins):
+    ///   1. <c>Resources/Characters/men_3D_color</c> — Tencent Hunyuan3D
+    ///      rigged + textured chibi. When found, an <see cref="Animator"/>
+    ///      is attached using <c>Resources/Characters/PlayerAnimator</c>
+    ///      (built by <c>Tools › CathayCrossing › Setup Character Animator</c>).
+    ///   2. <c>Resources/Characters/tripo_man_1</c> — older static Tripo
+    ///      mesh (kept as fallback so existing scenes don't break).
+    ///   3. <see cref="ProceduralCharacter"/> primitives.
+    ///
+    /// Materials cloned from an existing scene material so URP/Lit survives
+    /// WebGL shader stripping (only relevant for the procedural path).
     /// </summary>
     public class OfficePlayerSpawner : MonoBehaviour
     {
@@ -23,7 +31,15 @@ namespace CathayCrossing.Bootstrap
         public float spawnY = 0f;
 
         const string PlayerObjectName = "__OfficePlayer";
-        const string CharacterModelResourcePath = "Characters/tripo_man_1";
+
+        // Ordered list of character model paths to try, newest first. Stop at
+        // the first one Resources.Load actually returns.
+        static readonly string[] CharacterModelResourcePaths =
+        {
+            "Characters/men_3D_color",
+            "Characters/tripo_man_1",
+        };
+        const string AnimatorControllerResourcePath = "Characters/PlayerAnimator";
 
         void OnEnable()
         {
@@ -85,19 +101,25 @@ namespace CathayCrossing.Bootstrap
             var body = new GameObject("Body");
             body.transform.SetParent(spriteRoot.transform, false);
 
-            GameObject fbxVisual = TryInstantiateCharacterModel(body.transform);
+            GameObject fbxVisual = TryInstantiateCharacterModel(body.transform, out string loadedPath);
+            Animator visualAnimator = null;
             if (fbxVisual == null)
             {
                 Material baseMat = FindLoadedMaterial(scene);
                 var procedural = body.AddComponent<ProceduralCharacter>();
                 procedural.Build(baseMat);
             }
+            else
+            {
+                visualAnimator = AttachAnimator(fbxVisual);
+            }
 
             var ctrl = player.AddComponent<OctopathPlayerController>();
             ctrl.spriteRoot = spriteRoot.transform;
-            // Bob is a fake walk-cue for the primitive procedural body; a real
-            // skinned mesh should be driven by an Animator, not a vertical bob.
+            // Bob is a fake walk-cue for the primitive procedural body; the
+            // real skinned mesh is driven by the Animator below instead.
             ctrl.spriteVisual = fbxVisual != null ? null : body.transform;
+            ctrl.animator     = visualAnimator;
 
             SceneManager.MoveGameObjectToScene(player, scene);
 
@@ -105,24 +127,56 @@ namespace CathayCrossing.Bootstrap
 
             ConfigureCamera(scene, player.transform);
 
-            string visualKind = fbxVisual != null ? "tripo_man_1 FBX" : "ProceduralCharacter";
-            Debug.Log($"[OfficePlayerSpawner] Player ({visualKind}) spawned at {spawnPos} in '{scene.name}'. WASD/arrows to move, Shift to run.");
+            string visualKind = fbxVisual != null ? loadedPath : "ProceduralCharacter";
+            string animKind   = visualAnimator != null && visualAnimator.runtimeAnimatorController != null
+                ? $" + Animator '{visualAnimator.runtimeAnimatorController.name}'"
+                : "";
+            Debug.Log($"[OfficePlayerSpawner] Player ({visualKind}{animKind}) spawned at {spawnPos} in '{scene.name}'. WASD/arrows to move, Shift to run, H to wave.");
         }
 
         // ─── Helpers ────────────────────────────────────────────────────────
-        static GameObject TryInstantiateCharacterModel(Transform parent)
+        static GameObject TryInstantiateCharacterModel(Transform parent, out string loadedPath)
         {
-            var prefab = Resources.Load<GameObject>(CharacterModelResourcePath);
-            if (prefab == null)
+            foreach (var path in CharacterModelResourcePaths)
             {
-                Debug.LogWarning($"[OfficePlayerSpawner] Character model not found at Resources/{CharacterModelResourcePath}. Falling back to ProceduralCharacter.");
-                return null;
+                var prefab = Resources.Load<GameObject>(path);
+                if (prefab == null) continue;
+
+                var visual = Instantiate(prefab, parent);
+                visual.name = "Visual";
+                visual.transform.localPosition = Vector3.zero;
+                visual.transform.localRotation = Quaternion.identity;
+                loadedPath = path;
+                return visual;
             }
-            var visual = Instantiate(prefab, parent);
-            visual.name = "Visual";
-            visual.transform.localPosition = Vector3.zero;
-            visual.transform.localRotation = Quaternion.identity;
-            return visual;
+            Debug.LogWarning($"[OfficePlayerSpawner] No character model found in Resources at any of: {string.Join(", ", CharacterModelResourcePaths)}. Falling back to ProceduralCharacter.");
+            loadedPath = null;
+            return null;
+        }
+
+        // Wires the player Animator. The Tencent FBX already ships with an
+        // Animator component (Humanoid avatar baked at import time); we only
+        // assign the runtime controller and disable root motion so movement
+        // stays driven by CharacterController, not by the Walking clip.
+        static Animator AttachAnimator(GameObject visual)
+        {
+            var anim = visual.GetComponentInChildren<Animator>();
+            if (anim == null)
+            {
+                anim = visual.AddComponent<Animator>();
+            }
+            var controller = Resources.Load<RuntimeAnimatorController>(AnimatorControllerResourcePath);
+            if (controller != null)
+            {
+                anim.runtimeAnimatorController = controller;
+            }
+            else
+            {
+                Debug.LogWarning($"[OfficePlayerSpawner] AnimatorController not found at Resources/{AnimatorControllerResourcePath}. " +
+                                 "Run Tools › CathayCrossing › Setup Character Animator to generate it.");
+            }
+            anim.applyRootMotion = false;
+            return anim;
         }
 
         static Material FindLoadedMaterial(Scene scene)
