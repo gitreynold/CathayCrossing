@@ -11,13 +11,12 @@ namespace CathayCrossing.Bootstrap
     /// already placed in the scene, projected onto the floor (y = 0).
     ///
     /// Visual loading order (first hit wins):
-    ///   1. <c>Resources/Characters/men_3D_color</c> — Tencent Hunyuan3D
-    ///      rigged + textured chibi. When found, an <see cref="Animator"/>
+    ///   1. <c>Resources/Characters/men_rigged</c> — rigged + textured chibi
+    ///      from /Users/.../Desktop/men. When found, an <see cref="Animator"/>
     ///      is attached using <c>Resources/Characters/PlayerAnimator</c>
     ///      (built by <c>Tools › CathayCrossing › Setup Character Animator</c>).
-    ///   2. <c>Resources/Characters/tripo_man_1</c> — older static Tripo
-    ///      mesh (kept as fallback so existing scenes don't break).
-    ///   3. <see cref="ProceduralCharacter"/> primitives.
+    ///   2. <see cref="ProceduralCharacter"/> primitives (fallback when no
+    ///      rigged FBX is present in Resources).
     ///
     /// Materials cloned from an existing scene material so URP/Lit survives
     /// WebGL shader stripping (only relevant for the procedural path).
@@ -36,8 +35,7 @@ namespace CathayCrossing.Bootstrap
         // the first one Resources.Load actually returns.
         static readonly string[] CharacterModelResourcePaths =
         {
-            "Characters/men_3D_color",
-            "Characters/tripo_man_1",
+            "Characters/men_rigged",
         };
         const string AnimatorControllerResourcePath = "Characters/PlayerAnimator";
 

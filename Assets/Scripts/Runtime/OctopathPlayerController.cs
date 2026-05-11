@@ -48,8 +48,18 @@ namespace CathayCrossing.HD2D
         float _verticalVelocity;
 
         // Cached Animator parameter IDs — string lookups every frame add up.
-        static readonly int SpeedHash = Animator.StringToHash("Speed");
-        static readonly int WaveHash  = Animator.StringToHash("Wave");
+        static readonly int SpeedHash      = Animator.StringToHash("Speed");
+        static readonly int WaveHash       = Animator.StringToHash("Wave");
+        static readonly int IsRunningHash  = Animator.StringToHash("IsRunning");
+        // Layer 0 state hash for the Waving clip. Compared against
+        // Animator.GetCurrentAnimatorStateInfo / GetNextAnimatorStateInfo so
+        // we can suppress movement while the character is greeting.
+        static readonly int WavingStateHash = Animator.StringToHash("Waving");
+
+        // Tracked separately so UpdateAnimator() can see what ReadInput() saw
+        // this frame (Shift held + WASD/arrows pressed) — that's the trigger
+        // for the Animator's `IsRunning` bool.
+        bool _runningInput;
 
         void Reset()
         {
@@ -75,6 +85,23 @@ namespace CathayCrossing.HD2D
         {
             Vector2 input = ReadInput();
             bool running = Keyboard.current != null && Keyboard.current.leftShiftKey.isPressed;
+
+            // Animator's `IsRunning` should only be true when the player is
+            // actually moving with Shift held — Shift alone (no WASD/arrows)
+            // shouldn't kick the character into the running clip.
+            _runningInput = running && input.sqrMagnitude > 0.01f;
+
+            // While the character is greeting, zero the input so the controller
+            // doesn't translate or rotate this frame. Animator drives the wave
+            // clip independently. Check both the current state AND the next
+            // state (Animator returns mid-transition info on both sides), so
+            // movement is locked the instant the Wave trigger fires too.
+            if (IsWaving())
+            {
+                input         = Vector2.zero;
+                _runningInput = false;
+                running       = false;
+            }
 
             // Camera-relative movement on the XZ plane
             Vector3 fwd = Vector3.forward;
@@ -118,6 +145,9 @@ namespace CathayCrossing.HD2D
         {
             if (animator == null) return;
             animator.SetFloat(SpeedHash, _velocity.magnitude);
+            // Animator transitions: Idle ↔ Walking is driven by Speed alone
+            // (original behaviour); IsRunning escalates Walking → Running.
+            animator.SetBool(IsRunningHash, _runningInput);
 
             var kb = Keyboard.current;
             if (kb != null && kb[greetKey].wasPressedThisFrame)
@@ -159,6 +189,22 @@ namespace CathayCrossing.HD2D
             if (kb.sKey.isPressed || kb.downArrowKey.isPressed) y -= 1;
             if (kb.wKey.isPressed || kb.upArrowKey.isPressed) y += 1;
             return new Vector2(x, y);
+        }
+
+        // True while the Animator is in (or transitioning into) the Waving
+        // state on the base layer. Movement and rotation are suppressed for
+        // that window so the player doesn't slide while greeting.
+        bool IsWaving()
+        {
+            if (animator == null) return false;
+            var cur  = animator.GetCurrentAnimatorStateInfo(0);
+            if (cur.shortNameHash == WavingStateHash) return true;
+            if (animator.IsInTransition(0))
+            {
+                var nxt = animator.GetNextAnimatorStateInfo(0);
+                if (nxt.shortNameHash == WavingStateHash) return true;
+            }
+            return false;
         }
 
         public Vector3 Velocity => _velocity;
