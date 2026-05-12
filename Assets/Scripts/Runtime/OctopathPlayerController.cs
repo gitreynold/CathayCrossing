@@ -33,6 +33,10 @@ namespace CathayCrossing.HD2D
         [Tooltip("Key that fires the 'Wave' trigger on the Animator.")]
         public Key greetKey = Key.H;
 
+        [Header("Dance")]
+        [Tooltip("Key that fires the 'Dance' trigger on the Animator.")]
+        public Key danceKey = Key.F;
+
         [Header("Collision")]
         public float colliderHeight = 1.6f;
         public float colliderRadius = 0.35f;
@@ -50,11 +54,13 @@ namespace CathayCrossing.HD2D
         // Cached Animator parameter IDs — string lookups every frame add up.
         static readonly int SpeedHash      = Animator.StringToHash("Speed");
         static readonly int WaveHash       = Animator.StringToHash("Wave");
+        static readonly int DanceHash      = Animator.StringToHash("Dance");
         static readonly int IsRunningHash  = Animator.StringToHash("IsRunning");
-        // Layer 0 state hash for the Waving clip. Compared against
+        // Layer 0 state hashes for the action clips. Compared against
         // Animator.GetCurrentAnimatorStateInfo / GetNextAnimatorStateInfo so
-        // we can suppress movement while the character is greeting.
+        // we can suppress movement while the character is mid-performance.
         static readonly int WavingStateHash = Animator.StringToHash("Waving");
+        static readonly int DanceStateHash  = Animator.StringToHash("Dance");
 
         // Tracked separately so UpdateAnimator() can see what ReadInput() saw
         // this frame (Shift held + WASD/arrows pressed) — that's the trigger
@@ -91,12 +97,13 @@ namespace CathayCrossing.HD2D
             // shouldn't kick the character into the running clip.
             _runningInput = running && input.sqrMagnitude > 0.01f;
 
-            // While the character is greeting, zero the input so the controller
-            // doesn't translate or rotate this frame. Animator drives the wave
-            // clip independently. Check both the current state AND the next
-            // state (Animator returns mid-transition info on both sides), so
-            // movement is locked the instant the Wave trigger fires too.
-            if (IsWaving())
+            // While the character is performing a one-shot action (Wave or
+            // Dance), zero the input so the controller doesn't translate or
+            // rotate this frame. Animator drives the action clip independently.
+            // Check both the current state AND the next state (Animator returns
+            // mid-transition info on both sides), so movement is locked the
+            // instant the trigger fires too.
+            if (IsPerformingAction())
             {
                 input         = Vector2.zero;
                 _runningInput = false;
@@ -154,6 +161,10 @@ namespace CathayCrossing.HD2D
             {
                 animator.SetTrigger(WaveHash);
             }
+            if (kb != null && kb[danceKey].wasPressedThisFrame)
+            {
+                animator.SetTrigger(DanceHash);
+            }
         }
 
         public void Wave()
@@ -161,6 +172,12 @@ namespace CathayCrossing.HD2D
             // Public hook so UI buttons / NPC interactions can also trigger Wave
             // without simulating a key press.
             if (animator != null) animator.SetTrigger(WaveHash);
+        }
+
+        public void Dance()
+        {
+            // Public hook so UI buttons / NPC interactions can also trigger Dance.
+            if (animator != null) animator.SetTrigger(DanceHash);
         }
 
         void UpdateWalkBob()
@@ -191,18 +208,19 @@ namespace CathayCrossing.HD2D
             return new Vector2(x, y);
         }
 
-        // True while the Animator is in (or transitioning into) the Waving
-        // state on the base layer. Movement and rotation are suppressed for
-        // that window so the player doesn't slide while greeting.
-        bool IsWaving()
+        // True while the Animator is in (or transitioning into) any one-shot
+        // action state — currently Waving or Dance — on the base layer.
+        // Movement and rotation are suppressed for that window so the player
+        // doesn't slide while greeting or dancing.
+        bool IsPerformingAction()
         {
             if (animator == null) return false;
-            var cur  = animator.GetCurrentAnimatorStateInfo(0);
-            if (cur.shortNameHash == WavingStateHash) return true;
+            var cur = animator.GetCurrentAnimatorStateInfo(0);
+            if (cur.shortNameHash == WavingStateHash || cur.shortNameHash == DanceStateHash) return true;
             if (animator.IsInTransition(0))
             {
                 var nxt = animator.GetNextAnimatorStateInfo(0);
-                if (nxt.shortNameHash == WavingStateHash) return true;
+                if (nxt.shortNameHash == WavingStateHash || nxt.shortNameHash == DanceStateHash) return true;
             }
             return false;
         }

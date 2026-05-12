@@ -2,9 +2,9 @@
   <Project Path="MCPForUnity.Runtime.csproj" />
   <Project Path="MCPForUnity.Editor.csproj" />
   <Project Path="CathayCrossing.HD2D.Editor.csproj" />
+  <Project Path="CathayCrossing.Characters.csproj" />
   <Project Path="CathayCrossing.Core.csproj" />
   <Project Path="Assembly-CSharp.csproj" />
-  <Project Path="CathayCrossing.Characters.csproj" />
   <Project Path="CathayCrossing.HD2D.Runtime.csproj" />
   <Project Path="CathayCrossing.Bootstrap.csproj" />
   <Project Path="Assembly-CSharp-Editor.csproj" />

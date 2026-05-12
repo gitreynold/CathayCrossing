@@ -6,127 +6,162 @@ using UnityEngine;
 namespace CathayCrossing.HD2D.EditorTools
 {
     /// <summary>
-    /// One-click wiring for the player character + Mixamo animations.
+    /// Per-character animator wiring. Run via:
+    ///   Tools › CathayCrossing › Setup Default Character
+    ///   Tools › CathayCrossing › Setup Jay Character
+    ///   Tools › CathayCrossing › Setup All Characters
     ///
-    /// Run via: <c>Tools › CathayCrossing › Setup Character Animator</c>.
+    /// For each character it:
+    ///  1. Reimports its rigged FBX as Humanoid (its own Avatar).
+    ///  2. Reimports each Mixamo clip FBX as Humanoid (each builds its own
+    ///     avatar from "mixamorig:*" bones; Mecanim retargets via the abstract
+    ///     humanoid rig at runtime).
+    ///  3. Pulls embedded textures/materials out into per-character
+    ///     Textures/ and Materials/ folders and rebinds them to URP/Lit.
+    ///  4. Builds a per-character <c>PlayerAnimator.controller</c> with five
+    ///     states (Idle / Walking / Running / Waving / Dance) and four
+    ///     parameters (Speed / IsRunning / Wave / Dance).
     ///
-    /// Performs three jobs in order so the asset graph stays consistent:
-    ///  1. Reimports <c>men_rigged.fbx</c> as Humanoid and bakes a fresh Avatar
-    ///     out of its skeleton.
-    ///  2. Reimports each Mixamo clip FBX (Without Skin) as Humanoid. Each clip
-    ///     builds its own Avatar from its mixamorig:* bones — Unity retargets
-    ///     through Mecanim's abstract humanoid bones at runtime.
-    ///  3. Builds <c>PlayerAnimator.controller</c> with three states wired to
-    ///     match the original Speed-float design plus a new Running state:
-    ///        Idle ↔ Walking : gated by `Speed` (float) crossing the
-    ///                         IdleSpeedThreshold (original behaviour).
-    ///        Walking ↔ Running and Idle ↔ Running : gated by `IsRunning` (bool),
-    ///                         set true while the player holds Shift while
-    ///                         moving with WASD / arrow keys.
+    /// Idempotent — running again overwrites the controller in place.
     ///
-    ///     Walk and Run are two distinct states playing two distinct Mixamo
-    ///     clips, so the visible difference is unambiguous — no speed-blend.
-    ///
-    /// Idempotent — running it again just overwrites the controller in place.
+    /// Folder convention every character must follow:
+    ///   Assets/Resources/Characters/&lt;Name&gt;/
+    ///     &lt;MeshFile&gt;.fbx
+    ///     PlayerAnimator.controller   (generated)
+    ///     Animations/
+    ///        Happy Idle.fbx
+    ///        Walking.fbx
+    ///        Running.fbx
+    ///        Waving.fbx
+    ///        Dance.fbx
+    ///     Materials/    (extracted)
+    ///     Textures/     (extracted)
     /// </summary>
     public static class CharacterAnimatorSetup
     {
-        const string CharacterFbx   = "Assets/Resources/Characters/men_rigged.fbx";
-        const string AnimDir        = "Assets/Resources/Characters/Animations";
+        // Per-character config so adding a third one is just one new entry.
+        struct CharacterConfig
+        {
+            public string Name;       // e.g. "Default" — folder name under Resources/Characters/
+            public string MeshFile;   // e.g. "men_rigged.fbx" — filename inside that folder
+        }
+
+        static readonly CharacterConfig Default = new CharacterConfig
+        {
+            Name     = "Default",
+            MeshFile = "men_rigged.fbx",
+        };
+
+        static readonly CharacterConfig Jay = new CharacterConfig
+        {
+            Name     = "Jay",
+            MeshFile = "men_jay.fbx",
+        };
+
         const string IdleClipFile   = "Happy Idle.fbx";
         const string WalkClipFile   = "Walking.fbx";
         const string RunClipFile    = "Running.fbx";
         const string WaveClipFile   = "Waving.fbx";
-        const string ControllerPath = "Assets/Resources/Characters/PlayerAnimator.controller";
-        const string TexturesDir    = "Assets/Resources/Characters/Textures";
-        const string MaterialsDir   = "Assets/Resources/Characters/Materials";
+        const string DanceClipFile  = "Dance.fbx";
 
         const string SpeedParam     = "Speed";
         const string IsRunningParam = "IsRunning";
         const string WaveParam      = "Wave";
+        const string DanceParam     = "Dance";
 
-        // Same threshold as the original setup — controller velocity smoothing
-        // lingers briefly after movement stops, so we drop a tick later.
         const float IdleSpeedThreshold = 0.1f;
 
-        [MenuItem("Tools/CathayCrossing/Setup Character Animator")]
-        public static void Setup()
+        // ─── Menu items ─────────────────────────────────────────────────────
+
+        [MenuItem("Tools/CathayCrossing/Setup Default Character")]
+        public static void SetupDefault() { SetupCharacter(Default); }
+
+        [MenuItem("Tools/CathayCrossing/Setup Jay Character")]
+        public static void SetupJay()     { SetupCharacter(Jay); }
+
+        [MenuItem("Tools/CathayCrossing/Setup All Characters")]
+        public static void SetupAll()
         {
-            if (!File.Exists(CharacterFbx))
+            SetupCharacter(Default);
+            SetupCharacter(Jay);
+        }
+
+        // ─── Per-character pipeline ────────────────────────────────────────
+
+        static void SetupCharacter(CharacterConfig cfg)
+        {
+            string charDir       = $"Assets/Resources/Characters/{cfg.Name}";
+            string characterFbx  = $"{charDir}/{cfg.MeshFile}";
+            string animDir       = $"{charDir}/Animations";
+            string controllerPath= $"{charDir}/PlayerAnimator.controller";
+            string texturesDir   = $"{charDir}/Textures";
+            string materialsDir  = $"{charDir}/Materials";
+
+            if (!File.Exists(characterFbx))
             {
-                Debug.LogError($"[CharacterAnimatorSetup] Character FBX missing at {CharacterFbx}.\n" +
-                               "Copy the rigged FBX into Assets/Resources/Characters/ first.");
+                Debug.LogError($"[CharacterAnimatorSetup] '{cfg.Name}' FBX missing at {characterFbx}");
                 return;
             }
 
-            // 0) Pull the embedded textures + material out of the FBX and rewrite
-            //    the material to URP/Lit so the chibi doesn't render flat grey.
-            //    Idempotent — running again is a no-op once extracted.
-            ExtractAndConvertCharacterMaterial(CharacterFbx);
+            ExtractAndConvertCharacterMaterial(characterFbx, texturesDir, materialsDir);
+            ConfigureCharacterAsHumanoid(characterFbx);
 
-            // 1) Character → Humanoid, build its OWN avatar.
-            ConfigureCharacterAsHumanoid(CharacterFbx);
+            string idlePath  = Path.Combine(animDir, IdleClipFile);
+            string walkPath  = Path.Combine(animDir, WalkClipFile);
+            string runPath   = Path.Combine(animDir, RunClipFile);
+            string wavePath  = Path.Combine(animDir, WaveClipFile);
+            string dancePath = Path.Combine(animDir, DanceClipFile);
 
-            // 2) Mixamo clips → Humanoid, each builds its OWN avatar from its
-            //    "mixamorig:*" bone names. Runtime retargeting uses Mecanim's
-            //    abstract humanoid bones, so Tencent ↔ Mixamo connect via the
-            //    shared abstract rig.
-            string idlePath = Path.Combine(AnimDir, IdleClipFile);
-            string walkPath = Path.Combine(AnimDir, WalkClipFile);
-            string runPath  = Path.Combine(AnimDir, RunClipFile);
-            string wavePath = Path.Combine(AnimDir, WaveClipFile);
+            ConfigureClipAsHumanoid(idlePath,  isLoopable: true);
+            ConfigureClipAsHumanoid(walkPath,  isLoopable: true);
+            ConfigureClipAsHumanoid(runPath,   isLoopable: true);
+            // Wave and Dance are one-shot — Animator exits to Idle via exit-time.
+            ConfigureClipAsHumanoid(wavePath,  isLoopable: false);
+            ConfigureClipAsHumanoid(dancePath, isLoopable: false);
 
-            ConfigureClipAsHumanoid(idlePath, isLoopable: true);
-            ConfigureClipAsHumanoid(walkPath, isLoopable: true);
-            ConfigureClipAsHumanoid(runPath,  isLoopable: true);
-            // Wave is a one-shot greeting, not looping — Animator returns to
-            // Idle automatically via exit-time.
-            ConfigureClipAsHumanoid(wavePath, isLoopable: false);
+            var idleClip  = LoadFirstAnimationClip(idlePath);
+            var walkClip  = LoadFirstAnimationClip(walkPath);
+            var runClip   = LoadFirstAnimationClip(runPath);
+            var waveClip  = LoadFirstAnimationClip(wavePath);
+            var danceClip = LoadFirstAnimationClip(dancePath);
 
-            var idleClip = LoadFirstAnimationClip(idlePath);
-            var walkClip = LoadFirstAnimationClip(walkPath);
-            var runClip  = LoadFirstAnimationClip(runPath);
-            var waveClip = LoadFirstAnimationClip(wavePath);
-
-            if (idleClip == null || walkClip == null || runClip == null || waveClip == null)
+            if (idleClip == null || walkClip == null || runClip == null || waveClip == null || danceClip == null)
             {
-                Debug.LogError($"[CharacterAnimatorSetup] Couldn't find AnimationClip in one of: {idlePath}, {walkPath}, {runPath}, {wavePath}");
+                Debug.LogError($"[CharacterAnimatorSetup] '{cfg.Name}' missing a clip in {animDir}.");
                 return;
             }
 
-            // 3) Build (or rebuild) the AnimatorController
-            BuildController(idleClip, walkClip, runClip, waveClip);
+            BuildController(controllerPath, idleClip, walkClip, runClip, waveClip, danceClip);
 
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
-            Debug.Log("[CharacterAnimatorSetup] Done.\n" +
-                      $"  Character: {CharacterFbx}\n" +
-                      $"  Controller: {ControllerPath}\n" +
-                      $"  Clips: Idle={idleClip.name}, Walk={walkClip.name}, Run={runClip.name}, Wave={waveClip.name}");
+            Debug.Log($"[CharacterAnimatorSetup] '{cfg.Name}' done.\n" +
+                      $"  Character: {characterFbx}\n" +
+                      $"  Controller: {controllerPath}\n" +
+                      $"  Clips: Idle={idleClip.name}, Walk={walkClip.name}, Run={runClip.name}, Wave={waveClip.name}, Dance={danceClip.name}");
         }
 
         // ─── Texture / material extraction (URP) ───────────────────────────
 
-        static void ExtractAndConvertCharacterMaterial(string fbxPath)
+        static void ExtractAndConvertCharacterMaterial(string fbxPath, string texturesDir, string materialsDir)
         {
             var importer = AssetImporter.GetAtPath(fbxPath) as ModelImporter;
             if (importer == null) return;
 
-            EnsureFolder(TexturesDir);
-            EnsureFolder(MaterialsDir);
+            EnsureFolder(texturesDir);
+            EnsureFolder(materialsDir);
 
             // ExtractTextures returns false when there's nothing left to extract,
             // not an error. We don't gate on the bool.
-            importer.ExtractTextures(TexturesDir);
+            importer.ExtractTextures(texturesDir);
             AssetDatabase.Refresh();
 
-            // Pull every embedded material out into Materials/ as standalone .mat.
             int extracted = 0;
             foreach (var sub in AssetDatabase.LoadAllAssetsAtPath(fbxPath))
             {
                 if (sub is Material mat && AssetDatabase.IsSubAsset(mat))
                 {
-                    string targetPath = AssetDatabase.GenerateUniqueAssetPath($"{MaterialsDir}/{mat.name}.mat");
+                    string targetPath = AssetDatabase.GenerateUniqueAssetPath($"{materialsDir}/{mat.name}.mat");
                     string err = AssetDatabase.ExtractAsset(mat, targetPath);
                     if (string.IsNullOrEmpty(err)) extracted++;
                 }
@@ -138,13 +173,13 @@ namespace CathayCrossing.HD2D.EditorTools
                 AssetDatabase.ImportAsset(fbxPath, ImportAssetOptions.ForceUpdate);
             }
 
-            ConvertExtractedMaterialsToUrp();
+            ConvertExtractedMaterialsToUrp(texturesDir, materialsDir);
 
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
         }
 
-        static void ConvertExtractedMaterialsToUrp()
+        static void ConvertExtractedMaterialsToUrp(string texturesDir, string materialsDir)
         {
             var urpLit = Shader.Find("Universal Render Pipeline/Lit");
             if (urpLit == null)
@@ -155,21 +190,29 @@ namespace CathayCrossing.HD2D.EditorTools
 
             // Tencent Hunyuan3D file pattern: `texture_pbr_<id>.png` (basecolor,
             // no suffix), `*_normal.png`, `*_metallic.png`, `*_roughness.png`.
-            // Generic keyword search misses the basecolor (no descriptive suffix),
-            // so try the named family first and fall back to keywords.
             Texture2D albedoTex, normalTex, metallicTex;
-            FindTencentTextureSet(out albedoTex, out normalTex, out metallicTex);
-            if (albedoTex == null)
-                albedoTex = FindTextureByPattern("basecolor", "color", "diffuse", "albedo");
-            if (normalTex == null)
-                normalTex = FindTextureByPattern("normal");
-            if (metallicTex == null)
-                metallicTex = FindTextureByPattern("metallic");
+            FindTencentTextureSet(texturesDir, out albedoTex, out normalTex, out metallicTex);
+            if (albedoTex == null)   albedoTex   = FindTextureByPattern(texturesDir, "basecolor", "color", "diffuse", "albedo");
+            if (normalTex == null)   normalTex   = FindTextureByPattern(texturesDir, "normal");
+            if (metallicTex == null) metallicTex = FindTextureByPattern(texturesDir, "metallic");
 
             MarkAsNormalMap(normalTex);
+            // Metallic / roughness are data, not color — sampling them as sRGB
+            // bends the values through gamma and produces splotchy speculars
+            // (the "scratch marks" all over the chibi body during runtime).
+            MarkAsLinearData(metallicTex);
+            // Roughness sits in a separate file Tencent ships; nothing in
+            // URP/Lit reads it directly but we still want it linear in case
+            // someone wires it up later.
+            foreach (var guid in AssetDatabase.FindAssets("t:Texture2D", new[] { texturesDir }))
+            {
+                string p = AssetDatabase.GUIDToAssetPath(guid);
+                if (Path.GetFileNameWithoutExtension(p).ToLowerInvariant().EndsWith("_roughness"))
+                    MarkAsLinearData(AssetDatabase.LoadAssetAtPath<Texture2D>(p));
+            }
 
             int converted = 0;
-            foreach (var guid in AssetDatabase.FindAssets("t:Material", new[] { MaterialsDir }))
+            foreach (var guid in AssetDatabase.FindAssets("t:Material", new[] { materialsDir }))
             {
                 string path = AssetDatabase.GUIDToAssetPath(guid);
                 var mat = AssetDatabase.LoadAssetAtPath<Material>(path);
@@ -191,37 +234,35 @@ namespace CathayCrossing.HD2D.EditorTools
                     mat.SetTexture("_MetallicGlossMap", metallicTex);
                     mat.EnableKeyword("_METALLICSPECGLOSSMAP");
                 }
-                if (mat.HasProperty("_Smoothness"))  mat.SetFloat("_Smoothness",  0.30f);
-                if (mat.HasProperty("_Metallic"))    mat.SetFloat("_Metallic",    0f);
+                if (mat.HasProperty("_Smoothness")) mat.SetFloat("_Smoothness", 0.30f);
+                if (mat.HasProperty("_Metallic"))   mat.SetFloat("_Metallic",   0f);
 
                 EditorUtility.SetDirty(mat);
                 converted++;
             }
             string boundList = $"albedo={(albedoTex?.name ?? "(none)")}, normal={(normalTex?.name ?? "(none)")}, metallic={(metallicTex?.name ?? "(none)")}";
-            Debug.Log($"[CharacterAnimatorSetup] Converted {converted} materials to URP/Lit. Bound: {boundList}");
+            Debug.Log($"[CharacterAnimatorSetup] Converted {converted} material(s) in {materialsDir} to URP/Lit. Bound: {boundList}");
         }
 
-        static Texture2D FindTextureByPattern(params string[] keywords)
+        static Texture2D FindTextureByPattern(string texturesDir, params string[] keywords)
         {
-            foreach (var guid in AssetDatabase.FindAssets("t:Texture2D", new[] { TexturesDir }))
+            foreach (var guid in AssetDatabase.FindAssets("t:Texture2D", new[] { texturesDir }))
             {
                 string p = AssetDatabase.GUIDToAssetPath(guid);
                 string lower = Path.GetFileNameWithoutExtension(p).ToLowerInvariant();
                 foreach (var kw in keywords)
                 {
                     if (lower.Contains(kw))
-                    {
                         return AssetDatabase.LoadAssetAtPath<Texture2D>(p);
-                    }
                 }
             }
             return null;
         }
 
-        static void FindTencentTextureSet(out Texture2D albedo, out Texture2D normal, out Texture2D metallic)
+        static void FindTencentTextureSet(string texturesDir, out Texture2D albedo, out Texture2D normal, out Texture2D metallic)
         {
             albedo = null; normal = null; metallic = null;
-            foreach (var guid in AssetDatabase.FindAssets("t:Texture2D", new[] { TexturesDir }))
+            foreach (var guid in AssetDatabase.FindAssets("t:Texture2D", new[] { texturesDir }))
             {
                 string p = AssetDatabase.GUIDToAssetPath(guid);
                 string name = Path.GetFileNameWithoutExtension(p);
@@ -230,7 +271,7 @@ namespace CathayCrossing.HD2D.EditorTools
 
                 if (lower.EndsWith("_normal"))        normal   = AssetDatabase.LoadAssetAtPath<Texture2D>(p);
                 else if (lower.EndsWith("_metallic")) metallic = AssetDatabase.LoadAssetAtPath<Texture2D>(p);
-                else if (lower.EndsWith("_roughness")) { /* URP packs into MetallicGloss A */ }
+                else if (lower.EndsWith("_roughness")) { /* packed into MetallicGloss A */ }
                 else                                   albedo   = AssetDatabase.LoadAssetAtPath<Texture2D>(p);
             }
         }
@@ -244,6 +285,19 @@ namespace CathayCrossing.HD2D.EditorTools
             if (ti.textureType != TextureImporterType.NormalMap)
             {
                 ti.textureType = TextureImporterType.NormalMap;
+                ti.SaveAndReimport();
+            }
+        }
+
+        static void MarkAsLinearData(Texture2D tex)
+        {
+            if (tex == null) return;
+            string p = AssetDatabase.GetAssetPath(tex);
+            var ti = AssetImporter.GetAtPath(p) as TextureImporter;
+            if (ti == null) return;
+            if (ti.sRGBTexture)
+            {
+                ti.sRGBTexture = false;
                 ti.SaveAndReimport();
             }
         }
@@ -301,7 +355,6 @@ namespace CathayCrossing.HD2D.EditorTools
                     var c = clipSettings[i];
                     if (c.loopTime != isLoopable) { c.loopTime = isLoopable; dirty = true; }
                     if (isLoopable && !c.loopPose) { c.loopPose = true; dirty = true; }
-                    // Lock root XZ + Y rotation so Mixamo's in-place clip doesn't drift.
                     if (!c.lockRootPositionXZ) { c.lockRootPositionXZ = true; dirty = true; }
                     if (!c.lockRootRotation)   { c.lockRootRotation   = true; dirty = true; }
                     clipSettings[i] = c;
@@ -324,124 +377,94 @@ namespace CathayCrossing.HD2D.EditorTools
 
         // ─── Controller build ──────────────────────────────────────────────
 
-        // State graph — four states, three parameters:
-        //
-        //                       Speed > 0.1
-        //                       & !IsRunning
-        //   ┌────────┐  ────────────────────────►  ┌──────────┐
-        //   │  Idle  │                              │  Walking │
-        //   │        │  ◄────────────────────────  │          │
-        //   └────────┘   Speed < 0.1               └──────────┘
-        //        │                                       │
-        //        │  Speed > 0.1                          │  IsRunning
-        //        │  & IsRunning                          │
-        //        ▼                                       ▼
-        //   ┌──────────┐  ◄──── !IsRunning & Speed>0.1 ──┘
-        //   │  Running │
-        //   └──────────┘  ────► Speed < 0.1 ────► Idle
-        //
-        //        Any State ────── Wave trigger ──────► ┌──────────┐
-        //                                              │  Waving  │
-        //                              exit @ 0.95 ◄── │  one-shot│
-        //                                              └──────────┘
-        //                                                    │
-        //                                                    ▼
-        //                                                  Idle
-        //
-        // Original behaviour preserved: Speed alone drives Idle ↔ Walking.
-        // New behaviour: IsRunning bool (set by Shift while moving) escalates
-        // Walking → Running, or skips straight from Idle → Running when the
-        // player holds Shift before pressing WASD / arrow keys. Wave trigger
-        // interrupts anything for a one-shot greeting. Movement is suppressed
-        // by the runtime controller while the Waving state is current.
-        static void BuildController(AnimationClip idleClip, AnimationClip walkClip, AnimationClip runClip, AnimationClip waveClip)
+        // 5 states, 4 parameters — identical graph shape for every character.
+        // See README block at the top of this file for the transition map.
+        static void BuildController(string controllerPath, AnimationClip idleClip, AnimationClip walkClip, AnimationClip runClip, AnimationClip waveClip, AnimationClip danceClip)
         {
-            if (File.Exists(ControllerPath)) AssetDatabase.DeleteAsset(ControllerPath);
+            if (File.Exists(controllerPath)) AssetDatabase.DeleteAsset(controllerPath);
 
-            var controller = AnimatorController.CreateAnimatorControllerAtPath(ControllerPath);
+            var controller = AnimatorController.CreateAnimatorControllerAtPath(controllerPath);
             controller.AddParameter(SpeedParam,     AnimatorControllerParameterType.Float);
             controller.AddParameter(IsRunningParam, AnimatorControllerParameterType.Bool);
             controller.AddParameter(WaveParam,      AnimatorControllerParameterType.Trigger);
+            controller.AddParameter(DanceParam,     AnimatorControllerParameterType.Trigger);
 
             var sm = controller.layers[0].stateMachine;
 
-            var idle = sm.AddState("Idle");
-            idle.motion = idleClip;
-            idle.writeDefaultValues = true;
-
-            var walk = sm.AddState("Walking");
-            walk.motion = walkClip;
-            walk.writeDefaultValues = true;
-
-            var run = sm.AddState("Running");
-            run.motion = runClip;
-            run.writeDefaultValues = true;
-
-            var wave = sm.AddState("Waving");
-            wave.motion = waveClip;
-            wave.writeDefaultValues = true;
+            var idle  = sm.AddState("Idle");    idle.motion  = idleClip;  idle.writeDefaultValues  = true;
+            var walk  = sm.AddState("Walking"); walk.motion  = walkClip;  walk.writeDefaultValues  = true;
+            var run   = sm.AddState("Running"); run.motion   = runClip;   run.writeDefaultValues   = true;
+            var wave  = sm.AddState("Waving");  wave.motion  = waveClip;  wave.writeDefaultValues  = true;
+            var dance = sm.AddState("Dance");   dance.motion = danceClip; dance.writeDefaultValues = true;
 
             sm.defaultState = idle;
 
             const float kBlend = 0.10f;
 
-            // Idle → Walking (original Speed-float behaviour, but only when
-            // Shift isn't held — otherwise we go straight to Running below).
+            // Idle → Walking (Speed up, Shift not held)
             var idleToWalk = idle.AddTransition(walk);
             idleToWalk.AddCondition(AnimatorConditionMode.Greater, IdleSpeedThreshold, SpeedParam);
             idleToWalk.AddCondition(AnimatorConditionMode.IfNot,   0f,                 IsRunningParam);
             idleToWalk.hasExitTime = false;
             idleToWalk.duration    = kBlend;
 
-            // Idle → Running (Shift held + WASD/arrows pressed from a standstill)
+            // Idle → Running (Shift + WASD from a standstill)
             var idleToRun = idle.AddTransition(run);
             idleToRun.AddCondition(AnimatorConditionMode.Greater, IdleSpeedThreshold, SpeedParam);
             idleToRun.AddCondition(AnimatorConditionMode.If,      0f,                 IsRunningParam);
             idleToRun.hasExitTime = false;
             idleToRun.duration    = kBlend;
 
-            // Walking → Idle (original)
+            // Walking → Idle
             var walkToIdle = walk.AddTransition(idle);
             walkToIdle.AddCondition(AnimatorConditionMode.Less, IdleSpeedThreshold, SpeedParam);
             walkToIdle.hasExitTime = false;
             walkToIdle.duration    = kBlend;
 
-            // Walking → Running (press Shift while already walking)
+            // Walking → Running
             var walkToRun = walk.AddTransition(run);
             walkToRun.AddCondition(AnimatorConditionMode.If, 0f, IsRunningParam);
             walkToRun.hasExitTime = false;
             walkToRun.duration    = kBlend;
 
-            // Running → Walking (release Shift, still moving)
+            // Running → Walking
             var runToWalk = run.AddTransition(walk);
             runToWalk.AddCondition(AnimatorConditionMode.IfNot,   0f,                 IsRunningParam);
             runToWalk.AddCondition(AnimatorConditionMode.Greater, IdleSpeedThreshold, SpeedParam);
             runToWalk.hasExitTime = false;
             runToWalk.duration    = kBlend;
 
-            // Running → Idle (player stopped completely — drop straight to Idle
-            // whether Shift is still held or not).
+            // Running → Idle
             var runToIdle = run.AddTransition(idle);
             runToIdle.AddCondition(AnimatorConditionMode.Less, IdleSpeedThreshold, SpeedParam);
             runToIdle.hasExitTime = false;
             runToIdle.duration    = kBlend;
 
-            // Any State → Waving (H key sets the Wave trigger). canTransitionToSelf
-            // is false so spamming H during a wave doesn't restart from frame 0.
+            // Any State → Waving (H trigger)
             var anyToWave = sm.AddAnyStateTransition(wave);
             anyToWave.AddCondition(AnimatorConditionMode.If, 0f, WaveParam);
             anyToWave.duration            = kBlend;
             anyToWave.hasExitTime         = false;
             anyToWave.canTransitionToSelf = false;
 
-            // Waving → Idle on completion. Animator resolves Walking/Running
-            // next frame if the player is still moving (movement is locked
-            // during the wave, but the player can press a direction the same
-            // frame the wave ends).
+            // Waving → Idle on completion
             var waveToIdle = wave.AddTransition(idle);
             waveToIdle.hasExitTime = true;
             waveToIdle.exitTime    = 0.95f;
             waveToIdle.duration    = 0.20f;
+
+            // Any State → Dance (F trigger)
+            var anyToDance = sm.AddAnyStateTransition(dance);
+            anyToDance.AddCondition(AnimatorConditionMode.If, 0f, DanceParam);
+            anyToDance.duration            = kBlend;
+            anyToDance.hasExitTime         = false;
+            anyToDance.canTransitionToSelf = false;
+
+            // Dance → Idle on completion
+            var danceToIdle = dance.AddTransition(idle);
+            danceToIdle.hasExitTime = true;
+            danceToIdle.exitTime    = 0.95f;
+            danceToIdle.duration    = 0.25f;
 
             EditorUtility.SetDirty(controller);
         }

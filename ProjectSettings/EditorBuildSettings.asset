@@ -5,15 +5,18 @@ EditorBuildSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 2
   m_Scenes:
+  - enabled: 1
+    path: Assets/Scenes/CharacterSelect.unity
+    guid: 48f141430067f42399309eb8e7d3a83e
+  - enabled: 1
+    path: Assets/Scenes/OfficeScene.unity
+    guid: 7014f7ba53707478a84786fdf26bdeb9
   - enabled: 0
     path: Assets/Scenes/SampleScene.unity
     guid: 99c9720ab356a0642a771bea13969a05
   - enabled: 0
     path: Assets/Scenes/GameRoom.unity
     guid: aabbccddeeff001122334455667700b1
-  - enabled: 1
-    path: Assets/Scenes/OfficeScene.unity
-    guid: 7014f7ba53707478a84786fdf26bdeb9
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_UseUCBPForAssetBundles: 0

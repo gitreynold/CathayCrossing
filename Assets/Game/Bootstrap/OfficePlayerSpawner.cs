@@ -10,13 +10,19 @@ namespace CathayCrossing.Bootstrap
     /// Position is the geometric center of every Desk_*/Chair_* renderer
     /// already placed in the scene, projected onto the floor (y = 0).
     ///
-    /// Visual loading order (first hit wins):
-    ///   1. <c>Resources/Characters/men_rigged</c> — rigged + textured chibi
-    ///      from /Users/.../Desktop/men. When found, an <see cref="Animator"/>
-    ///      is attached using <c>Resources/Characters/PlayerAnimator</c>
-    ///      (built by <c>Tools › CathayCrossing › Setup Character Animator</c>).
-    ///   2. <see cref="ProceduralCharacter"/> primitives (fallback when no
-    ///      rigged FBX is present in Resources).
+    /// Character pick order (first hit wins):
+    ///   1. Player's last selection — <c>PlayerPrefs["ActiveCharacterId"]</c>
+    ///      set by the CharacterSelect UI scene.
+    ///   2. The first <see cref="CharacterDefinition"/> we find in
+    ///      <c>Resources/Characters/</c> (alphabetical by asset name).
+    ///   3. <see cref="ProceduralCharacter"/> primitives (when no
+    ///      CharacterDefinitions exist at all).
+    ///
+    /// Each <see cref="CharacterDefinition"/> bundles a rigged FBX + an
+    /// AnimatorController, so the spawner doesn't care about per-character
+    /// asset paths — it just instantiates definition.body and assigns
+    /// definition.controller. New characters slot in by dropping another
+    /// .asset under Resources/Characters/&lt;Name&gt;/.
     ///
     /// Materials cloned from an existing scene material so URP/Lit survives
     /// WebGL shader stripping (only relevant for the procedural path).
@@ -31,13 +37,10 @@ namespace CathayCrossing.Bootstrap
 
         const string PlayerObjectName = "__OfficePlayer";
 
-        // Ordered list of character model paths to try, newest first. Stop at
-        // the first one Resources.Load actually returns.
-        static readonly string[] CharacterModelResourcePaths =
-        {
-            "Characters/men_rigged",
-        };
-        const string AnimatorControllerResourcePath = "Characters/PlayerAnimator";
+        // Where the CharacterSelect scene stashes the player's pick. Read at
+        // SpawnInto time so a fresh selection takes effect on the very next
+        // scene load (without a restart).
+        public const string ActiveCharacterPrefsKey = "ActiveCharacterId";
 
         void OnEnable()
         {
@@ -99,7 +102,8 @@ namespace CathayCrossing.Bootstrap
             var body = new GameObject("Body");
             body.transform.SetParent(spriteRoot.transform, false);
 
-            GameObject fbxVisual = TryInstantiateCharacterModel(body.transform, out string loadedPath);
+            CharacterDefinition activeDef = ResolveActiveCharacter();
+            GameObject fbxVisual = activeDef != null ? InstantiateCharacterDefinition(activeDef, body.transform) : null;
             Animator visualAnimator = null;
             if (fbxVisual == null)
             {
@@ -109,7 +113,7 @@ namespace CathayCrossing.Bootstrap
             }
             else
             {
-                visualAnimator = AttachAnimator(fbxVisual);
+                visualAnimator = AttachAnimator(fbxVisual, activeDef);
             }
 
             var ctrl = player.AddComponent<OctopathPlayerController>();
@@ -125,53 +129,76 @@ namespace CathayCrossing.Bootstrap
 
             ConfigureCamera(scene, player.transform);
 
-            string visualKind = fbxVisual != null ? loadedPath : "ProceduralCharacter";
+            string visualKind = fbxVisual != null && activeDef != null
+                ? $"'{activeDef.displayName}' ({activeDef.body.name})"
+                : "ProceduralCharacter";
             string animKind   = visualAnimator != null && visualAnimator.runtimeAnimatorController != null
                 ? $" + Animator '{visualAnimator.runtimeAnimatorController.name}'"
                 : "";
-            Debug.Log($"[OfficePlayerSpawner] Player ({visualKind}{animKind}) spawned at {spawnPos} in '{scene.name}'. WASD/arrows to move, Shift to run, H to wave.");
+            Debug.Log($"[OfficePlayerSpawner] Player {visualKind}{animKind} spawned at {spawnPos} in '{scene.name}'. WASD/arrows to move, Shift to run, H to wave, F to dance.");
         }
 
         // ─── Helpers ────────────────────────────────────────────────────────
-        static GameObject TryInstantiateCharacterModel(Transform parent, out string loadedPath)
-        {
-            foreach (var path in CharacterModelResourcePaths)
-            {
-                var prefab = Resources.Load<GameObject>(path);
-                if (prefab == null) continue;
 
-                var visual = Instantiate(prefab, parent);
-                visual.name = "Visual";
-                visual.transform.localPosition = Vector3.zero;
-                visual.transform.localRotation = Quaternion.identity;
-                loadedPath = path;
-                return visual;
+        // Resolve the active character via PlayerPrefs first, falling back to
+        // the first definition we find in Resources/Characters/ so the game
+        // still boots in the very first run before the player has picked.
+        static CharacterDefinition ResolveActiveCharacter()
+        {
+            var all = Resources.LoadAll<CharacterDefinition>("Characters");
+            if (all == null || all.Length == 0)
+            {
+                Debug.LogWarning("[OfficePlayerSpawner] No CharacterDefinition assets found under Resources/Characters/. " +
+                                 "Falling back to ProceduralCharacter.");
+                return null;
             }
-            Debug.LogWarning($"[OfficePlayerSpawner] No character model found in Resources at any of: {string.Join(", ", CharacterModelResourcePaths)}. Falling back to ProceduralCharacter.");
-            loadedPath = null;
-            return null;
+
+            string wanted = PlayerPrefs.GetString(ActiveCharacterPrefsKey, "");
+            if (!string.IsNullOrEmpty(wanted))
+            {
+                foreach (var def in all)
+                {
+                    if (def != null && def.id == wanted) return def;
+                }
+                Debug.LogWarning($"[OfficePlayerSpawner] PlayerPrefs['{ActiveCharacterPrefsKey}']='{wanted}' " +
+                                 "but no matching CharacterDefinition. Using first available.");
+            }
+
+            // Deterministic fallback so multiple runs land on the same default.
+            System.Array.Sort(all, (a, b) => string.CompareOrdinal(a.name, b.name));
+            return all[0];
         }
 
-        // Wires the player Animator. The Tencent FBX already ships with an
+        static GameObject InstantiateCharacterDefinition(CharacterDefinition def, Transform parent)
+        {
+            if (def.body == null)
+            {
+                Debug.LogWarning($"[OfficePlayerSpawner] CharacterDefinition '{def.id}' has no body. Falling back to ProceduralCharacter.");
+                return null;
+            }
+            var visual = Instantiate(def.body, parent);
+            visual.name = "Visual";
+            visual.transform.localPosition = Vector3.zero;
+            visual.transform.localRotation = Quaternion.identity;
+            return visual;
+        }
+
+        // Wires the player Animator. The rigged FBX already ships with an
         // Animator component (Humanoid avatar baked at import time); we only
         // assign the runtime controller and disable root motion so movement
         // stays driven by CharacterController, not by the Walking clip.
-        static Animator AttachAnimator(GameObject visual)
+        static Animator AttachAnimator(GameObject visual, CharacterDefinition def)
         {
             var anim = visual.GetComponentInChildren<Animator>();
-            if (anim == null)
+            if (anim == null) anim = visual.AddComponent<Animator>();
+            if (def != null && def.controller != null)
             {
-                anim = visual.AddComponent<Animator>();
-            }
-            var controller = Resources.Load<RuntimeAnimatorController>(AnimatorControllerResourcePath);
-            if (controller != null)
-            {
-                anim.runtimeAnimatorController = controller;
+                anim.runtimeAnimatorController = def.controller;
             }
             else
             {
-                Debug.LogWarning($"[OfficePlayerSpawner] AnimatorController not found at Resources/{AnimatorControllerResourcePath}. " +
-                                 "Run Tools › CathayCrossing › Setup Character Animator to generate it.");
+                Debug.LogWarning($"[OfficePlayerSpawner] CharacterDefinition '{def?.id ?? "(null)"}' has no AnimatorController. " +
+                                 "Run Tools › CathayCrossing › Setup <Name> Character to generate it.");
             }
             anim.applyRootMotion = false;
             return anim;
