@@ -42,7 +42,14 @@ namespace CathayCrossing.HD2D
         public float colliderRadius = 0.35f;
         public float gravity = -20f;
 
+        [Header("Network")]
+        public bool isLocalPlayer = true;
+        [HideInInspector] public Vector3 targetPosition;
+        [HideInInspector] public float targetRotationY;
+
         Vector3 _velocity;
+        Vector3 _lastPosition;
+        float _remoteSpeed;
         // Zero until the player first moves; the DirectionalBillboardSprite treats
         // a zero facing as "face the camera" (front view).
         Vector3 _facing = Vector3.zero;
@@ -89,20 +96,23 @@ namespace CathayCrossing.HD2D
 
         void Update()
         {
+            if (isLocalPlayer)
+            {
+                UpdateLocalPlayer();
+            }
+            else
+            {
+                UpdateRemotePlayer();
+            }
+        }
+
+        void UpdateLocalPlayer()
+        {
             Vector2 input = ReadInput();
             bool running = Keyboard.current != null && Keyboard.current.leftShiftKey.isPressed;
 
-            // Animator's `IsRunning` should only be true when the player is
-            // actually moving with Shift held — Shift alone (no WASD/arrows)
-            // shouldn't kick the character into the running clip.
             _runningInput = running && input.sqrMagnitude > 0.01f;
 
-            // While the character is performing a one-shot action (Wave or
-            // Dance), zero the input so the controller doesn't translate or
-            // rotate this frame. Animator drives the action clip independently.
-            // Check both the current state AND the next state (Animator returns
-            // mid-transition info on both sides), so movement is locked the
-            // instant the trigger fires too.
             if (IsPerformingAction())
             {
                 input         = Vector2.zero;
@@ -110,7 +120,6 @@ namespace CathayCrossing.HD2D
                 running       = false;
             }
 
-            // Camera-relative movement on the XZ plane
             Vector3 fwd = Vector3.forward;
             Vector3 right = Vector3.right;
             if (Camera.main != null)
@@ -134,6 +143,8 @@ namespace CathayCrossing.HD2D
             motion.y = _verticalVelocity;
             _controller.Move(motion * Time.deltaTime);
 
+            SyncPositionWithServer();
+
             if (desired.sqrMagnitude > 0.01f) _facing = desired;
 
             if (spriteRoot != null && _facing.sqrMagnitude > 0.001f)
@@ -144,6 +155,54 @@ namespace CathayCrossing.HD2D
 
             UpdateAnimator();
             UpdateWalkBob();
+        }
+
+        void UpdateRemotePlayer()
+        {
+            // 1. 平滑移動到目標位置 (解決瞬間移動)
+            // 使用 Lerp 讓位置更新更平滑，15f 是平滑係數，數值越大越跟腳，數值越小越平滑
+            Vector3 nextPos = Vector3.Lerp(transform.position, targetPosition, 15f * Time.deltaTime);
+            
+            // 2. 計算這一幀實際移動的位移量來驅動動畫
+            Vector3 moveDelta = nextPos - transform.position;
+            transform.position = nextPos;
+
+            // 3. 平滑轉向目標角度
+            if (spriteRoot != null)
+            {
+                Quaternion targetRot = Quaternion.Euler(0, targetRotationY, 0);
+                spriteRoot.rotation = Quaternion.Slerp(spriteRoot.rotation, targetRot, rotationSpeed * Time.deltaTime);
+            }
+
+            // 4. 計算速度值供 Animator 使用
+            // 將每幀位移轉換為每秒速度
+            float currentFrameSpeed = moveDelta.magnitude / Time.deltaTime;
+            _remoteSpeed = Mathf.Lerp(_remoteSpeed, currentFrameSpeed, 10f * Time.deltaTime);
+            
+            // 模擬 OctopathPlayerController 原本使用的 _velocity.magnitude
+            _velocity = transform.forward * _remoteSpeed;
+
+            UpdateAnimator();
+            UpdateWalkBob();
+        }
+
+        // --- 多人連線同步變數 ---
+        private float _lastSyncTime;
+        private Vector3 _lastSyncedPos;
+        private const float SyncInterval = 0.05f; // 每秒發送 20 次更新
+
+        private void SyncPositionWithServer()
+        {
+            if (CathayCrossing.Network.NetworkManager.Instance == null) return;
+            
+            // 如果移動距離極小且時間沒到，就不發送
+            if (Time.time - _lastSyncTime < SyncInterval) return;
+            if (Vector3.Distance(transform.position, _lastSyncedPos) < 0.01f) return;
+
+            _lastSyncTime = Time.time;
+            _lastSyncedPos = transform.position;
+            
+            CathayCrossing.Network.NetworkManager.Instance.SendMove(transform.position, spriteRoot.eulerAngles.y);
         }
 
         // Drive the rigged-character Animator. The procedural body has no
@@ -160,10 +219,12 @@ namespace CathayCrossing.HD2D
             if (kb != null && kb[greetKey].wasPressedThisFrame)
             {
                 animator.SetTrigger(WaveHash);
+                CathayCrossing.Network.NetworkManager.Instance?.SendAction("WAVE");
             }
             if (kb != null && kb[danceKey].wasPressedThisFrame)
             {
                 animator.SetTrigger(DanceHash);
+                CathayCrossing.Network.NetworkManager.Instance?.SendAction("DANCE");
             }
         }
 

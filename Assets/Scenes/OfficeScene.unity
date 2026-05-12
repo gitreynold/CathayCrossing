@@ -55509,6 +55509,52 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 988446540210764840, guid: 8708ab1362d084d05b0882760fcfccc0, type: 3}
   m_PrefabInstance: {fileID: 2131076381}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &2134400852
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2134400854}
+  - component: {fileID: 2134400853}
+  m_Layer: 0
+  m_Name: NetworkManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &2134400853
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2134400852}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dda45329bd6aabf489e863af39bc7620, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: CathayCrossing.HD2D.Runtime::CathayCrossing.Network.NetworkManager
+  serverUrl: ws://localhost:3000
+  playerPrefab: {fileID: 2424376019784880726, guid: 066f40b7ca2df0f42942ee48c04fc021, type: 3}
+--- !u!4 &2134400854
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2134400852}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 2.46662, y: 0.45923, z: -0.96424}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &2136787418
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -56005,3 +56051,4 @@ SceneRoots:
   - {fileID: 1372576369}
   - {fileID: 60590034}
   - {fileID: 1956141394}
+  - {fileID: 2134400854}
