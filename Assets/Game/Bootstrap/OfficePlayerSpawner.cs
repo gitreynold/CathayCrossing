@@ -123,6 +123,9 @@ namespace CathayCrossing.Bootstrap
             ctrl.spriteVisual = fbxVisual != null ? null : body.transform;
             ctrl.animator     = visualAnimator;
 
+            // Add ID display
+            player.AddComponent<CharacterIdDisplay>();
+
             SceneManager.MoveGameObjectToScene(player, scene);
 
             OfficeRoomSetup.Apply(scene);

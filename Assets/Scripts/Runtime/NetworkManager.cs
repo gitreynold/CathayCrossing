@@ -33,6 +33,7 @@ namespace CathayCrossing.Network
         private ClientWebSocket _ws;
         private CancellationTokenSource _cts;
         private string _myPlayerId = "連線中...";
+        public string MyPlayerId => _myPlayerId;
         private Dictionary<string, GameObject> _otherPlayers = new Dictionary<string, GameObject>();
         private Queue<Action> _mainThreadActions = new Queue<Action>();
         private string _lastLog = "等待連線...";
@@ -96,6 +97,22 @@ namespace CathayCrossing.Network
             if (data.type == "INIT") {
                 _myPlayerId = data.id;
                 _lastLog = "我的 ID: " + data.id;
+                
+                // Set ID for local player
+                var localPlayer = GameObject.FindGameObjectWithTag("Player");
+                if (localPlayer != null)
+                {
+                    // For local player, finding the ID display anywhere in children is fine
+                    var idDisplay = localPlayer.GetComponentInChildren<CathayCrossing.HD2D.CharacterIdDisplay>();
+                    if (idDisplay == null) idDisplay = localPlayer.AddComponent<CathayCrossing.HD2D.CharacterIdDisplay>();
+                    idDisplay.SetId(_myPlayerId);
+                    Debug.Log($"[Network] Applied ID {_myPlayerId} to local player.");
+                }
+                else
+                {
+                    Debug.LogWarning("[Network] Local player not found by tag 'Player' during INIT.");
+                }
+
                 if (data.others != null) foreach (var o in data.others) SpawnOtherPlayer(o.id, o.position);
             }
             else if (data.type == "ENTER") {
@@ -136,6 +153,9 @@ namespace CathayCrossing.Network
             Vector3 startPos = (pos != null) ? new Vector3(pos.x, pos.y, pos.z) : new Vector3(0, 0, 0);
             GameObject go = Instantiate(playerPrefab, startPos, Quaternion.identity);
             go.name = "RemotePlayer_" + id;
+            
+            // IMPORTANT: Ensure remote players don't have the Player tag to avoid logic conflicts
+            if (go.CompareTag("Player")) go.tag = "Untagged";
 
             // 嘗試從根目錄或子目錄找腳本
             var script = go.GetComponentInChildren<CathayCrossing.HD2D.OctopathPlayerController>();
@@ -143,9 +163,19 @@ namespace CathayCrossing.Network
                 script.isLocalPlayer = false;
                 script.targetPosition = startPos;
                 script.enabled = true;
+                
+                // Add ID display to the SAME object as the controller so it moves with it
+                var idDisplay = script.gameObject.GetComponent<CathayCrossing.HD2D.CharacterIdDisplay>();
+                if (idDisplay == null) idDisplay = script.gameObject.AddComponent<CathayCrossing.HD2D.CharacterIdDisplay>();
+                idDisplay.SetId(id);
+                
                 Debug.Log($"[Network] 成功生成玩家 {id}，位置: {startPos}");
             } else {
                 Debug.LogWarning($"[Network] 警告：生成的 Prefab '{go.name}' 身上找不到 OctopathPlayerController 腳本！");
+                
+                // Fallback: Add to root
+                var idDisplay = go.AddComponent<CathayCrossing.HD2D.CharacterIdDisplay>();
+                idDisplay.SetId(id);
             }
             
             var cc = go.GetComponentInChildren<CharacterController>();
@@ -168,8 +198,13 @@ namespace CathayCrossing.Network
         public async void SendAction(string actionName)
         {
             if (_ws?.State != WebSocketState.Open) return;
+            
+            var localPlayer = GameObject.FindGameObjectWithTag("Player");
+            Vector3 pos = localPlayer != null ? localPlayer.transform.position : transform.position;
+            float rot = localPlayer != null ? localPlayer.transform.eulerAngles.y : transform.eulerAngles.y;
+
             try {
-                string json = $"{{\"type\":\"MOVE\",\"action\":\"{actionName}\",\"position\":{{\"x\":{transform.position.x.ToString("F3")},\"y\":{transform.position.y.ToString("F3")},\"z\":{transform.position.z.ToString("F3")}}},\"rotation\":{transform.eulerAngles.y.ToString("F3")}}}";
+                string json = $"{{\"type\":\"MOVE\",\"action\":\"{actionName}\",\"position\":{{\"x\":{pos.x.ToString("F3")},\"y\":{pos.y.ToString("F3")},\"z\":{pos.z.ToString("F3")}}},\"rotation\":{rot.ToString("F3")}}}";
                 byte[] bytes = Encoding.UTF8.GetBytes(json);
                 await _ws.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, _cts.Token);
             } catch { }
