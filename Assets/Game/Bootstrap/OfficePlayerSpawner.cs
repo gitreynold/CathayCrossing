@@ -69,10 +69,27 @@ namespace CathayCrossing.Bootstrap
                 if (root.CompareTag("Player")) return;
             }
 
-            Vector3 center = ComputeDeskChairCenter(scene, out bool found);
-            if (!found)
+            // Designer can drop a placeholder (capsule etc.) named Player_Test /
+            // __PlayerSpawn / PlayerSpawn anywhere in the scene to pin the spawn
+            // point. Fall back to the geometric center of Desk_*/Chair_* when
+            // no anchor is present (legacy behavior).
+            Vector3 center;
+            bool found;
+            Transform anchor = FindSpawnAnchor(scene);
+            if (anchor != null)
             {
-                Debug.LogWarning($"[OfficePlayerSpawner] No Desk_*/Chair_* objects found in '{scene.name}'. Spawning at origin.");
+                center = anchor.position;
+                found = true;
+                // Hide the marker so it doesn't render alongside the player.
+                anchor.gameObject.SetActive(false);
+            }
+            else
+            {
+                center = ComputeDeskChairCenter(scene, out found);
+                if (!found)
+                {
+                    Debug.LogWarning($"[OfficePlayerSpawner] No Player_Test/__PlayerSpawn anchor and no Desk_*/Chair_* in '{scene.name}'. Spawning at origin.");
+                }
             }
 
             // Flip the whole map 180° around the desk-chair center so the back
@@ -131,6 +148,12 @@ namespace CathayCrossing.Bootstrap
             OfficeRoomSetup.Apply(scene);
 
             ConfigureCamera(scene, player.transform);
+
+            // Orient the spawned player so its front faces the camera. We seed
+            // spriteRoot's rotation here; OctopathPlayerController only touches
+            // it after the player first moves (when _facing becomes non-zero),
+            // so this initial orientation sticks through the idle pose.
+            FacePlayerToCamera(spriteRoot.transform, scene);
 
             string visualKind = fbxVisual != null && activeDef != null
                 ? $"'{activeDef.displayName}' ({activeDef.body.name})"
@@ -221,6 +244,44 @@ namespace CathayCrossing.Bootstrap
                 }
             }
             return null;
+        }
+
+        // Look for a designer-placed spawn marker. The first match in
+        // depth-first order wins; nothing logs if absent because the caller
+        // gracefully falls back to the desk-chair center.
+        static readonly string[] SpawnAnchorNames = { "Player_Test", "__PlayerSpawn", "PlayerSpawn" };
+
+        static Transform FindSpawnAnchor(Scene scene)
+        {
+            foreach (var root in scene.GetRootGameObjects())
+            {
+                foreach (var t in root.GetComponentsInChildren<Transform>(includeInactive: true))
+                {
+                    if (t == null) continue;
+                    string n = t.name;
+                    for (int i = 0; i < SpawnAnchorNames.Length; i++)
+                    {
+                        if (n == SpawnAnchorNames[i]) return t;
+                    }
+                }
+            }
+            return null;
+        }
+
+        // Rotate spriteRoot so the character's forward (+Z) points back at the
+        // camera. OctopathCamera's yaw determines the horizontal direction the
+        // camera looks; the player's forward = camera's look direction reversed,
+        // i.e. yaw + 180° around Y.
+        static void FacePlayerToCamera(Transform spriteRoot, Scene scene)
+        {
+            if (spriteRoot == null) return;
+            float yaw = 0f;
+            foreach (var root in scene.GetRootGameObjects())
+            {
+                var oc = root.GetComponentInChildren<OctopathCamera>(includeInactive: false);
+                if (oc != null) { yaw = oc.yaw; break; }
+            }
+            spriteRoot.rotation = Quaternion.Euler(0f, yaw + 180f, 0f);
         }
 
         static Vector3 ComputeDeskChairCenter(Scene scene, out bool found)
