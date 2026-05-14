@@ -28,14 +28,17 @@ namespace CathayCrossing.HD2D.EditorTools
     ///   Assets/Resources/Characters/&lt;Name&gt;/
     ///     &lt;MeshFile&gt;.fbx
     ///     PlayerAnimator.controller   (generated)
-    ///     Animations/
-    ///        Happy Idle.fbx
-    ///        Walking.fbx
-    ///        Running.fbx
-    ///        Waving.fbx
-    ///        Dance.fbx
     ///     Materials/    (extracted)
     ///     Textures/     (extracted)
+    ///
+    /// Animation clips are SHARED across characters (Mecanim Humanoid retargets
+    /// any clip onto any humanoid avatar) and live at:
+    ///   Assets/Game/Characters/Animations/
+    ///     Happy Idle.fbx   (from Jay)
+    ///     Walking.fbx      (from Default)
+    ///     Running.fbx      (from Default)
+    ///     Waving.fbx       (from Default)
+    ///     Dance.fbx        (from Default)
     /// </summary>
     public static class CharacterAnimatorSetup
     {
@@ -64,6 +67,14 @@ namespace CathayCrossing.HD2D.EditorTools
         const string WaveClipFile   = "Waving.fbx";
         const string DanceClipFile  = "Dance.fbx";
 
+        // Mecanim Humanoid retargets a single clip onto any humanoid avatar, so
+        // every character shares one animation set. Curated picks (per request):
+        //   Dance / Walking / Running / Waving → from Default's Mixamo export
+        //   Happy Idle                          → from Jay's export
+        // Kept outside Resources/ so the FBX files don't auto-bundle — clips are
+        // pulled into builds via the PlayerAnimator.controller's GUID references.
+        const string SharedAnimDir = "Assets/Game/Characters/Animations";
+
         const string SpeedParam     = "Speed";
         const string IsRunningParam = "IsRunning";
         const string WaveParam      = "Wave";
@@ -84,6 +95,61 @@ namespace CathayCrossing.HD2D.EditorTools
         {
             SetupCharacter(Default);
             SetupCharacter(Jay);
+            CleanUpLegacyAnimationDirs();
+        }
+
+        // Standalone cleanup hook so the chore can be invoked without rebuilding
+        // controllers. Useful when the shared-anims migration has already run
+        // and only stragglers remain.
+        [MenuItem("Tools/CathayCrossing/Clean Up Legacy Per-Character Animations")]
+        public static void CleanUpLegacyAnimationDirsMenu() => CleanUpLegacyAnimationDirs();
+
+        // Every per-character Animations/ folder is now redundant — clips live
+        // under SharedAnimDir. AssetDatabase.DeleteAsset bypasses the host
+        // filesystem permission problem (Unity manages the import library so it
+        // can remove the asset even when raw rm can't).
+        static void CleanUpLegacyAnimationDirs()
+        {
+            string[] legacyDirs = {
+                $"Assets/Resources/Characters/{Default.Name}/Animations",
+                $"Assets/Resources/Characters/{Jay.Name}/Animations",
+            };
+            int removed = 0;
+            foreach (var dir in legacyDirs)
+            {
+                if (AssetDatabase.IsValidFolder(dir))
+                {
+                    if (AssetDatabase.DeleteAsset(dir))
+                    {
+                        removed++;
+                        Debug.Log($"[CharacterAnimatorSetup] Removed legacy anim dir: {dir}");
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"[CharacterAnimatorSetup] Failed to remove {dir}. Delete it manually in Project view.");
+                    }
+                }
+            }
+            // Also wipe any *.bak* stragglers from earlier ops in the Jay folder.
+            CleanUpBakStragglers($"Assets/Resources/Characters/{Jay.Name}");
+            CleanUpBakStragglers($"Assets/Resources/Characters/{Default.Name}");
+
+            if (removed > 0) AssetDatabase.Refresh();
+        }
+
+        static void CleanUpBakStragglers(string folder)
+        {
+            if (!AssetDatabase.IsValidFolder(folder)) return;
+            foreach (var guid in AssetDatabase.FindAssets("", new[] { folder }))
+            {
+                string p = AssetDatabase.GUIDToAssetPath(guid);
+                string name = Path.GetFileName(p);
+                if (name.Contains(".bak"))
+                {
+                    if (AssetDatabase.DeleteAsset(p))
+                        Debug.Log($"[CharacterAnimatorSetup] Removed straggler: {p}");
+                }
+            }
         }
 
         // ─── Per-character pipeline ────────────────────────────────────────
@@ -92,7 +158,7 @@ namespace CathayCrossing.HD2D.EditorTools
         {
             string charDir       = $"Assets/Resources/Characters/{cfg.Name}";
             string characterFbx  = $"{charDir}/{cfg.MeshFile}";
-            string animDir       = $"{charDir}/Animations";
+            string animDir       = SharedAnimDir;
             string controllerPath= $"{charDir}/PlayerAnimator.controller";
             string texturesDir   = $"{charDir}/Textures";
             string materialsDir  = $"{charDir}/Materials";
