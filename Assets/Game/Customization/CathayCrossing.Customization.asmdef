@@ -1,0 +1,19 @@
+{
+    "name": "CathayCrossing.Customization",
+    "rootNamespace": "CathayCrossing.Customization",
+    "references": [
+        "CathayCrossing.Core",
+        "CathayCrossing.Characters",
+        "Unity.TextMeshPro",
+        "Unity.InputSystem"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

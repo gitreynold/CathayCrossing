@@ -1,0 +1,20 @@
+{
+    "name": "CathayCrossing.Bootstrap",
+    "rootNamespace": "CathayCrossing.Bootstrap",
+    "references": [
+        "CathayCrossing.Core",
+        "CathayCrossing.Characters",
+        "CathayCrossing.Customization",
+        "CathayCrossing.HD2D.Runtime",
+        "Unity.TextMeshPro"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

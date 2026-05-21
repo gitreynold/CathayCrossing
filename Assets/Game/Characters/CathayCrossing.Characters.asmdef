@@ -1,0 +1,16 @@
+{
+    "name": "CathayCrossing.Characters",
+    "rootNamespace": "CathayCrossing.Characters",
+    "references": [
+        "CathayCrossing.Core"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

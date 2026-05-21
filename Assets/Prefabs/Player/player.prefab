@@ -1,0 +1,137 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &2424376019784880726
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 837092570808924149}
+  m_Layer: 0
+  m_Name: player
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &837092570808924149
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2424376019784880726}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 3.34675, y: 0, z: -1.31435}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 4882206416383042842}
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1001 &4921217933928661745
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 837092570808924149}
+    m_Modifications:
+    - target: {fileID: -8679921383154817045, guid: 1dd8e98f5606749f28c7fbd6c975070b, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 3.4748302
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 1dd8e98f5606749f28c7fbd6c975070b, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: -10.72
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 1dd8e98f5606749f28c7fbd6c975070b, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 27.6
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 1dd8e98f5606749f28c7fbd6c975070b, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 1dd8e98f5606749f28c7fbd6c975070b, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 1dd8e98f5606749f28c7fbd6c975070b, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 1dd8e98f5606749f28c7fbd6c975070b, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 1dd8e98f5606749f28c7fbd6c975070b, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 1dd8e98f5606749f28c7fbd6c975070b, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 1dd8e98f5606749f28c7fbd6c975070b, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 919132149155446097, guid: 1dd8e98f5606749f28c7fbd6c975070b, type: 3}
+      propertyPath: m_Name
+      value: men_rigged
+      objectReference: {fileID: 0}
+    - target: {fileID: 5866666021909216657, guid: 1dd8e98f5606749f28c7fbd6c975070b, type: 3}
+      propertyPath: m_Controller
+      value: 
+      objectReference: {fileID: 9100000, guid: 4664eb2cd4559414cbd1a8c7b80ccfd1, type: 2}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 1dd8e98f5606749f28c7fbd6c975070b, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1747483670909583229}
+  m_SourcePrefab: {fileID: 100100000, guid: 1dd8e98f5606749f28c7fbd6c975070b, type: 3}
+--- !u!4 &4882206416383042842 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: 1dd8e98f5606749f28c7fbd6c975070b, type: 3}
+  m_PrefabInstance: {fileID: 4921217933928661745}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1 &5227206315617861536 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: 1dd8e98f5606749f28c7fbd6c975070b, type: 3}
+  m_PrefabInstance: {fileID: 4921217933928661745}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &1747483670909583229
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5227206315617861536}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6b83ff6b33a7e4853a42564b2ac6bcc9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: CathayCrossing.HD2D.Runtime::CathayCrossing.HD2D.OctopathPlayerController
+  moveSpeed: 5
+  runMultiplier: 1.7
+  acceleration: 18
+  rotationSpeed: 12
+  spriteRoot: {fileID: 4882206416383042842}
+  spriteVisual: {fileID: 0}
+  animator: {fileID: 5866666021909216657, guid: 1dd8e98f5606749f28c7fbd6c975070b, type: 3}
+  bobAmplitude: 0.07
+  stepsPerSecond: 6
+  greetKey: 22
+  danceKey: 20
+  colliderHeight: 1.6
+  colliderRadius: 0.35
+  gravity: -20
+  isLocalPlayer: 1
+  targetPosition: {x: 0, y: 0, z: 0}
+  targetRotationY: 0
