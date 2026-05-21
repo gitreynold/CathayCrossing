@@ -98,6 +98,17 @@ namespace CathayCrossing.HD2D.EditorTools
             CleanUpLegacyAnimationDirs();
         }
 
+        // Public entry so other editor tools (CustomizeSceneSetup) can run
+        // the full per-character pipeline (humanoid + texture extraction +
+        // URP conversion + per-character animator controller) on FBX files
+        // they imported themselves. The folder/file naming convention is the
+        // same as the built-in Default/Jay paths:
+        //   Assets/Resources/Characters/&lt;folderName&gt;/&lt;meshFileName&gt;
+        public static void SetupCharacterByName(string folderName, string meshFileName)
+        {
+            SetupCharacter(new CharacterConfig { Name = folderName, MeshFile = meshFileName });
+        }
+
         // Standalone cleanup hook so the chore can be invoked without rebuilding
         // controllers. Useful when the shared-anims migration has already run
         // and only stragglers remain.

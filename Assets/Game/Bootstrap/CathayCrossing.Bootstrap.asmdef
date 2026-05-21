@@ -4,6 +4,7 @@
     "references": [
         "CathayCrossing.Core",
         "CathayCrossing.Characters",
+        "CathayCrossing.Customization",
         "CathayCrossing.HD2D.Runtime",
         "Unity.TextMeshPro"
     ],

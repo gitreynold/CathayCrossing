@@ -1,4 +1,6 @@
+using System.Collections.Generic;
 using CathayCrossing.Characters;
+using CathayCrossing.Customization;
 using CathayCrossing.HD2D;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -119,8 +121,16 @@ namespace CathayCrossing.Bootstrap
             var body = new GameObject("Body");
             body.transform.SetParent(spriteRoot.transform, false);
 
-            CharacterDefinition activeDef = ResolveActiveCharacter();
-            GameObject fbxVisual = activeDef != null ? InstantiateCharacterDefinition(activeDef, body.transform) : null;
+            // LEGO assembly path: if there's a CharacterPartCatalog plus
+            // per-slot PlayerPrefs, build the assembled body. Otherwise
+            // fall back to the single-variant legacy path.
+            CharacterDefinition activeDef = null;
+            GameObject fbxVisual = InstantiateAssembledFromPrefs(body.transform, out activeDef);
+            if (fbxVisual == null)
+            {
+                activeDef = ResolveActiveCharacter();
+                fbxVisual = activeDef != null ? InstantiateCharacterDefinition(activeDef, body.transform) : null;
+            }
             Animator visualAnimator = null;
             if (fbxVisual == null)
             {
@@ -179,6 +189,19 @@ namespace CathayCrossing.Bootstrap
                 return null;
             }
 
+            // Pick the catalog's base character — it's the rig the LEGO
+            // assembler always spawns first, so its CharacterDefinition is
+            // what carries the AnimatorController for the assembled body.
+            var catalog = Resources.Load<CharacterPartCatalog>("CharacterPartCatalog");
+            if (catalog != null && !string.IsNullOrEmpty(catalog.baseCharacterId))
+            {
+                foreach (var def in all)
+                {
+                    if (def != null && def.id == catalog.baseCharacterId) return def;
+                }
+            }
+
+            // Legacy single-variant pref (older builds wrote one global id).
             string wanted = PlayerPrefs.GetString(ActiveCharacterPrefsKey, "");
             if (!string.IsNullOrEmpty(wanted))
             {
@@ -186,13 +209,42 @@ namespace CathayCrossing.Bootstrap
                 {
                     if (def != null && def.id == wanted) return def;
                 }
-                Debug.LogWarning($"[OfficePlayerSpawner] PlayerPrefs['{ActiveCharacterPrefsKey}']='{wanted}' " +
-                                 "but no matching CharacterDefinition. Using first available.");
             }
 
             // Deterministic fallback so multiple runs land on the same default.
             System.Array.Sort(all, (a, b) => string.CompareOrdinal(a.name, b.name));
             return all[0];
+        }
+
+        // Build the assembled (multi-slot) body when the catalog + per-slot
+        // PlayerPrefs are available. Returns null when there's nothing
+        // overriding the legacy single-variant path.
+        static GameObject InstantiateAssembledFromPrefs(Transform parent, out CharacterDefinition baseDef)
+        {
+            baseDef = null;
+            var catalog = Resources.Load<CharacterPartCatalog>("CharacterPartCatalog");
+            if (catalog == null) return null;
+
+            // bodies by id
+            var bodyById = new System.Collections.Generic.Dictionary<string, GameObject>();
+            CharacterDefinition picked = null;
+            foreach (var def in Resources.LoadAll<CharacterDefinition>("Characters"))
+            {
+                if (def == null || string.IsNullOrEmpty(def.id) || def.body == null) continue;
+                bodyById[def.id] = def.body;
+                if (def.id == catalog.baseCharacterId) picked = def;
+            }
+            if (picked == null) return null;
+            baseDef = picked;
+
+            // selection from PlayerPrefs
+            var selection = new System.Collections.Generic.Dictionary<CharacterPartSlot, string>();
+            foreach (CharacterPartSlot slot in System.Enum.GetValues(typeof(CharacterPartSlot)))
+            {
+                selection[slot] = PlayerPrefs.GetString(CharacterCustomizeController.PlayerPrefsSlotPrefix + slot,
+                                                       catalog.baseCharacterId);
+            }
+            return CharacterAssembler.Assemble(catalog, selection, bodyById, parent);
         }
 
         static GameObject InstantiateCharacterDefinition(CharacterDefinition def, Transform parent)
@@ -202,10 +254,22 @@ namespace CathayCrossing.Bootstrap
                 Debug.LogWarning($"[OfficePlayerSpawner] CharacterDefinition '{def.id}' has no body. Falling back to ProceduralCharacter.");
                 return null;
             }
+
+            // Each variant ships its own rig + mesh. Earlier we tried
+            // sharing Default3D's skeleton via CharacterMeshSwapper to
+            // neutralise per-variant lean, but the bindpose differences
+            // distorted the swapped meshes (arms folded, knees popping).
+            // Self-contained rigs avoid that distortion.
             var visual = Instantiate(def.body, parent);
             visual.name = "Visual";
             visual.transform.localPosition = Vector3.zero;
             visual.transform.localRotation = Quaternion.identity;
+
+            // Apply baked-spine-lean compensation if the definition asks
+            // for it. The component sits in LateUpdate so it lands AFTER
+            // Animator's writes — without that the next animation frame
+            // would clobber the correction.
+            PostureCorrection.Attach(visual, "Spine", def.spineCorrectionEuler);
             return visual;
         }
 

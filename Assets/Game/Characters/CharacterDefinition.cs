@@ -23,12 +23,30 @@ namespace CathayCrossing.Characters
         [Tooltip("Friendly label shown in the character-select UI.")]
         public string displayName = "Default";
 
-        [Tooltip("The rigged FBX (with Humanoid avatar) to instantiate as the " +
-                 "player's visual.")]
+        [Tooltip("The rigged FBX (with Humanoid avatar) supplying the visible " +
+                 "mesh + materials. For the master character this is also the " +
+                 "rig source; for swappable variants this is the mesh donor " +
+                 "that gets re-bound onto rigSource's bones at spawn time.")]
         public GameObject body;
+
+        [Tooltip("Optional shared-rig source. When set, the spawner " +
+                 "instantiates this FBX (its skeleton + Animator + Avatar) " +
+                 "and re-binds the variant's SkinnedMeshRenderers from " +
+                 "'body' onto rigSource's bones by name. Leave null when " +
+                 "this character ships its own rig.")]
+        public GameObject rigSource;
 
         [Tooltip("Per-character AnimatorController built by " +
                  "Tools › CathayCrossing › Setup <Name> Character.")]
         public RuntimeAnimatorController controller;
+
+        [Tooltip("Optional spine tilt applied AFTER the Animator updates " +
+                 "(LateUpdate). Lets us straighten variants whose FBX rest " +
+                 "pose ships with a baked-in lean — Hunyuan3D's exporter " +
+                 "doesn't lock a bone-axis convention, so each generation " +
+                 "of Jay/Style3 can land a few degrees off vertical. Zero " +
+                 "= no correction. Positive X pitches the upper body " +
+                 "forward (counter a backward lean).")]
+        public Vector3 spineCorrectionEuler;
     }
 }

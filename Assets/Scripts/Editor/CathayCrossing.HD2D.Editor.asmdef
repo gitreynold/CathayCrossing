@@ -3,6 +3,10 @@
     "rootNamespace": "CathayCrossing.HD2D.EditorTools",
     "references": [
         "CathayCrossing.HD2D.Runtime",
+        "CathayCrossing.Characters",
+        "CathayCrossing.Customization",
+        "Unity.TextMeshPro",
+        "Unity.InputSystem",
         "Unity.RenderPipelines.Universal.Runtime",
         "Unity.RenderPipelines.Core.Runtime"
     ],

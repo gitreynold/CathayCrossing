@@ -1,21 +1,23 @@
 namespace CathayCrossing.Characters
 {
     /// <summary>
-    /// Customizable slots on a character. The base body (skinned skeleton +
-    /// head/hands/skin) is always present and is NOT a slot — it's the
-    /// foundation that all slot meshes re-bind onto.
+    /// Two-slot LEGO breakdown used by the customise scene + spawner.
+    /// Matches the tab order in the right rail of CustomizeScene.unity.
     ///
-    /// Adding a new slot here is a breaking change: every CharacterAppearance
-    /// asset will need a new field. Prefer Accessory* slots for additive items.
+    /// We collapsed down from five slots to two because every fine-grain
+    /// split (body / pants / shoes / hands) exposed at least one variant
+    /// where the source FBX baked those regions into a single mesh
+    /// (Style3 has body + pants in one mesh) or the inter-region skinning
+    /// stretched across the rig (Jay's pants drifted off Default3D's
+    /// hips). Picking whole-body identities sidesteps every one of those
+    /// cases — within a single variant the mesh stays internally
+    /// consistent and we only need to worry about the head/body
+    /// interface at the neck.
     /// </summary>
     public enum CharacterPartSlot
     {
-        Hair = 0,
-        Top = 1,
-        Bottom = 2,
-        Shoes = 3,
-        AccessoryHead = 10,
-        AccessoryFace = 11,
-        AccessoryBack = 12,
+        Head = 0,   // hair + face + ears + nose + eye details
+        Body = 1,   // everything from the neck down — torso, arms, hands,
+                    // hips, legs, feet, shoes — in one swappable group.
     }
 }
