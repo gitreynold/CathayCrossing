@@ -120,6 +120,7 @@ namespace CathayCrossing.HD2D
                 running       = false;
             }
 
+            // Camera-relative movement on the XZ plane
             Vector3 fwd = Vector3.forward;
             Vector3 right = Vector3.right;
             if (Camera.main != null)
