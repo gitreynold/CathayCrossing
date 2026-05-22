@@ -114,6 +114,14 @@ namespace CathayCrossing.Bootstrap
             cc.minMoveDistance = 0f;
             cc.stepOffset = 0.2f;
 
+            // Kinematic Rigidbody required so CharacterController reliably fires
+            // OnTriggerEnter on trigger colliders (elevator doors, scene doors, etc.)
+            var rb = player.AddComponent<Rigidbody>();
+            rb.isKinematic  = true;
+            rb.useGravity   = false;
+            rb.interpolation = RigidbodyInterpolation.None;
+            rb.constraints  = RigidbodyConstraints.FreezeAll;
+
             // SpriteRoot rotates to face movement; Body bobs vertically while walking.
             var spriteRoot = new GameObject("SpriteRoot");
             spriteRoot.transform.SetParent(player.transform, false);
