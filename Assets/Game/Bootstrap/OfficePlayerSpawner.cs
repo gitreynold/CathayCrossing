@@ -216,16 +216,18 @@ namespace CathayCrossing.Bootstrap
             return all[0];
         }
 
-        // Build the assembled (multi-slot) body when the catalog + per-slot
-        // PlayerPrefs are available. Returns null when there's nothing
-        // overriding the legacy single-variant path.
+        // LEGO mesh-swap restored 2026-05-26: spawn the catalog's base rig
+        // (Default3D) and transplant head + body parts from whatever the
+        // player picked in the customise scene. baseDef returns the BASE
+        // character's CharacterDefinition so the caller's animator-wiring
+        // code attaches the rig's own controller — transplanted parts
+        // don't carry their own.
         static GameObject InstantiateAssembledFromPrefs(Transform parent, out CharacterDefinition baseDef)
         {
             baseDef = null;
             var catalog = Resources.Load<CharacterPartCatalog>("CharacterPartCatalog");
             if (catalog == null) return null;
 
-            // bodies by id
             var bodyById = new System.Collections.Generic.Dictionary<string, GameObject>();
             CharacterDefinition picked = null;
             foreach (var def in Resources.LoadAll<CharacterDefinition>("Characters"))
@@ -237,7 +239,6 @@ namespace CathayCrossing.Bootstrap
             if (picked == null) return null;
             baseDef = picked;
 
-            // selection from PlayerPrefs
             var selection = new System.Collections.Generic.Dictionary<CharacterPartSlot, string>();
             foreach (CharacterPartSlot slot in System.Enum.GetValues(typeof(CharacterPartSlot)))
             {

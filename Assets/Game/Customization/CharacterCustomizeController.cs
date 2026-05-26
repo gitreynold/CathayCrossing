@@ -77,6 +77,9 @@ namespace CathayCrossing.Customization
         readonly List<Button> _slotOptionButtons = new();
         readonly Dictionary<string, CharacterDefinition> _definitionsById = new();
 
+        // LEGO mesh-swap restored 2026-05-26: Head + Body each have their
+        // own list of variant options. Head is the default opened tab to
+        // match the right-rail order in the mockup.
         CharacterPartSlot _activeTab = CharacterPartSlot.Head;
         GameObject _assembled;
 
@@ -284,8 +287,10 @@ namespace CathayCrossing.Customization
             _assembled = CharacterAssembler.Assemble(catalog, _selection, _bodyByCharacterId, previewAnchor);
             if (_assembled == null) return;
 
-            // Drive the preview with the base character's AnimatorController
-            // so the assembled body plays idle.
+            // LEGO mesh-swap: the base rig (catalog.baseCharacterId,
+            // typically Default3D) drives animation. Transplanted variant
+            // SMRs follow the base bones — they don't have their own
+            // Animator. So we attach the base character's controller.
             if (_definitionsById.TryGetValue(catalog.baseCharacterId, out var baseDef) && baseDef.controller != null)
             {
                 var anim = _assembled.GetComponentInChildren<Animator>();

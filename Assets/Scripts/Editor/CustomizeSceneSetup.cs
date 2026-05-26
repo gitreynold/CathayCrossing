@@ -75,69 +75,49 @@ namespace CathayCrossing.HD2D.EditorTools
 
         // Right-rail category tabs. Single Chinese glyph keeps the bar
         // compact and matches the icon-like density of the reference mockup.
-        // Hands removed per design — variant FBXs all share Default3D's
-        // hand parts so there's nothing meaningful to swap there.
+        //
+        // 2026-05-26：Default3D 已重出帶骨架版本，三人物現在都能當 LEGO
+        // mesh donor，所以「頭」tab 恢復。catalog 改用 bounding-box Y 切
+        // 頭/身，避免上次「整套 part 塞 Body」造成的頭部錯位。
         static readonly (CharacterPartSlot slot, string label)[] CategoryTabs =
         {
             (CharacterPartSlot.Head,  "頭"),
             (CharacterPartSlot.Body,  "身"),
         };
 
-        // ─── Part catalog (manual mapping baked from the FBX analysis) ──
+        // ─── Part catalog (bone-weight dominant classification) ────────────
         //
-        // For each character × slot, the GameObject names of the mesh
-        // parts that comprise the slot inside that character's FBX.
-        // Numbers are unique to each generation — Hunyuan3D doesn't lock
-        // a per-slot naming convention, so the only way to know which
-        // part is which body region is to inspect bounding box centres
-        // and dominant vertex groups (which is how this table was
-        // produced).
+        // 2026-05-26 v2：catalog 重建改用「mesh 的 vertex 大多綁哪根骨頭」
+        // 來分類，比 bounding-box Y 軸切更準確：
         //
-        // Style3 part_5 is special: a single mesh that spans both upper
-        // body and pants. We list it under both Body and Pants with
-        // combinesBodyAndPants=true; the controller force-locks the
-        // other slot when the user picks Style3 in one of them.
+        //   • 髮型 / 臉 / 耳朵 / 鼻子 ─ 大多 vertex weight 綁 Head bone → Head slot
+        //   • 手 / 手指 ─ 綁 LeftHand / RightHand bone → Body slot
+        //   • 軀幹 / 腿 / 鞋 ─ 綁 Spine / UpLeg / Foot 等 → Body slot
+        //
+        // 為什麼這比 bounding-box 好：T-pose 下手部的 SkinnedMeshRenderer
+        // 的 mesh bounds 中心 Y 約落在肩膀高度，跟「上半身上緣」很接近，
+        // 用 0.78 ratio 切容易把整支手臂誤判成 Head。改用 dominant bone
+        // 後，手臂 mesh 主要綁 Arm / Hand bone，永遠落在 Body slot。
+        //
+        // Bounding-box Y 仍保留為 fallback：mesh 沒 boneWeights 資料時
+        // (極少見) 走老路。
         const string CatalogAssetPath = "Assets/Resources/CharacterPartCatalog.asset";
+        const float HeadCutoffRatio = 0.78f;
 
-        struct PartMap
+        // 骨頭名稱判別。Hunyuan3D / Mixamo / Unity Humanoid 大致都用這幾個
+        // 關鍵字命名頭部相關 bone。命中任一就視為 Head slot 候選。
+        static readonly string[] HeadBoneNameTokens = { "head", "neck", "face", "skull", "jaw" };
+
+        static bool IsHeadBoneName(string boneName)
         {
-            public CharacterPartSlot Slot;
-            public string[] PartNames;
-            public bool CombinesBodyAndPants;
+            if (string.IsNullOrEmpty(boneName)) return false;
+            string n = boneName.ToLowerInvariant();
+            foreach (var tok in HeadBoneNameTokens)
+            {
+                if (n.Contains(tok)) return true;
+            }
+            return false;
         }
-
-        static readonly System.Collections.Generic.Dictionary<string, PartMap[]> CharacterPartMaps = new()
-        {
-            // Head  = hair + every face sub-part (face main, ears, nose,
-            //         eye details).
-            // Body  = everything else — torso, arms, hands, hips, legs,
-            //         feet, shoes. Sub-part numbers are unique per variant
-            //         (Hunyuan3D doesn't lock a naming convention).
-            ["Default3D"] = new[]
-            {
-                new PartMap { Slot = CharacterPartSlot.Head, PartNames = new[] { "part_0.001", "part_2.001", "part_4.001", "part_6.001", "part_8.001" } },
-                new PartMap { Slot = CharacterPartSlot.Body, PartNames = new[] {
-                    "part_1.001",  "part_3.001",  "part_5.001",  "part_7.001",
-                    "part_9.001",  "part_10.001", "part_11.001", "part_12.001",
-                } },
-            },
-            ["JayPartial"] = new[]
-            {
-                new PartMap { Slot = CharacterPartSlot.Head, PartNames = new[] { "part_0.001", "part_7.001", "part_8.001", "part_9.001", "part_10.001" } },
-                new PartMap { Slot = CharacterPartSlot.Body, PartNames = new[] {
-                    "part_1.001", "part_2.001", "part_3.001",  "part_4.001",
-                    "part_5.001", "part_6.001", "part_11.001", "part_12.001",
-                } },
-            },
-            ["Style3"] = new[]
-            {
-                new PartMap { Slot = CharacterPartSlot.Head, PartNames = new[] { "part_0.001", "part_1.001", "part_2.001", "part_7.001" } },
-                new PartMap { Slot = CharacterPartSlot.Body, PartNames = new[] {
-                    "part_3.001", "part_4.001", "part_5.001",
-                    "part_6.001", "part_8.001", "part_9.001",
-                } },
-            },
-        };
 
         // ─── Menu items ─────────────────────────────────────────────────────
 
@@ -282,26 +262,174 @@ namespace CathayCrossing.HD2D.EditorTools
             foreach (var p in Partials) displayByCharId[p.CharacterId] = p.DisplayName;
 
             var entries = new System.Collections.Generic.List<CharacterPartCatalog.Entry>();
-            foreach (var kvp in CharacterPartMaps)
+            foreach (var p in Partials)
             {
-                string charId = kvp.Key;
+                string charId = p.CharacterId;
                 string display = displayByCharId.TryGetValue(charId, out var d) ? d : charId;
-                foreach (var map in kvp.Value)
+
+                // Load the imported FBX prefab and scan all SkinnedMeshRenderer
+                // children. Their GameObject names are the part_X identifiers
+                // CharacterAssembler uses for enable/disable + transplant.
+                string fbxPath = $"Assets/Resources/Characters/{charId}/{p.TargetFbxName}.fbx";
+                var fbxAsset = AssetDatabase.LoadAssetAtPath<GameObject>(fbxPath);
+                if (fbxAsset == null)
+                {
+                    Debug.LogWarning($"[CustomizeSceneSetup] Skipping catalog entry for '{charId}' — FBX missing at {fbxPath}.");
+                    continue;
+                }
+
+                // Classify each part by its dominant bone (the bone that
+                // owns the largest sum of vertex weights). Hair / face are
+                // weighted mostly to Head; hands to LeftHand/RightHand;
+                // torso to Spine; etc. Falling back to bounding-box Y
+                // when we can't read bone weights at all (no rig, single-
+                // bone, or stripped-down mesh).
+                var headParts = new System.Collections.Generic.List<string>();
+                var bodyParts = new System.Collections.Generic.List<string>();
+                var partDebug  = new System.Collections.Generic.List<string>();
+
+                // For fallback bookkeeping.
+                var fallbackY = new System.Collections.Generic.Dictionary<string, float>();
+                float minY = float.PositiveInfinity;
+                float maxY = float.NegativeInfinity;
+
+                foreach (var smr in fbxAsset.GetComponentsInChildren<SkinnedMeshRenderer>(includeInactive: true))
+                {
+                    if (smr == null || smr.sharedMesh == null) continue;
+                    string n = smr.gameObject.name;
+                    if (string.IsNullOrEmpty(n)) continue;
+                    if (headParts.Contains(n) || bodyParts.Contains(n)) continue;
+
+                    var mesh    = smr.sharedMesh;
+                    var weights = mesh.boneWeights;
+                    var bones   = smr.bones;
+                    bool classifiedByBone = false;
+                    float headFraction = 0f;
+                    string dominantBoneName = null;
+
+                    if (weights != null && weights.Length > 0 && bones != null && bones.Length > 0)
+                    {
+                        // Pre-flag every bone in the rig: is its name a
+                        // head-family name? (head / neck / face / skull /
+                        // jaw). Cheaper than re-checking inside the inner
+                        // loop.
+                        var isHeadBone = new bool[bones.Length];
+                        for (int i = 0; i < bones.Length; i++)
+                        {
+                            isHeadBone[i] = bones[i] != null && IsHeadBoneName(bones[i].name);
+                        }
+
+                        // Tally per-bone total weight + sum of weight that
+                        // landed on head-family bones. headWeight / total
+                        // ratio tells us "how much of this mesh is rigged
+                        // to the head region". A pure ear-mesh that's 60%
+                        // weighted to Neck + 40% to Head still scores
+                        // 100% (both head-family), correctly catching it
+                        // for the Head slot even though no single bone
+                        // dominates by name.
+                        float totalWeight = 0f;
+                        float headWeight = 0f;
+                        var totalPerBone = new float[bones.Length];
+                        for (int i = 0; i < weights.Length; i++)
+                        {
+                            var w = weights[i];
+                            if (w.boneIndex0 >= 0 && w.boneIndex0 < bones.Length) { totalPerBone[w.boneIndex0] += w.weight0; totalWeight += w.weight0; if (isHeadBone[w.boneIndex0]) headWeight += w.weight0; }
+                            if (w.boneIndex1 >= 0 && w.boneIndex1 < bones.Length) { totalPerBone[w.boneIndex1] += w.weight1; totalWeight += w.weight1; if (isHeadBone[w.boneIndex1]) headWeight += w.weight1; }
+                            if (w.boneIndex2 >= 0 && w.boneIndex2 < bones.Length) { totalPerBone[w.boneIndex2] += w.weight2; totalWeight += w.weight2; if (isHeadBone[w.boneIndex2]) headWeight += w.weight2; }
+                            if (w.boneIndex3 >= 0 && w.boneIndex3 < bones.Length) { totalPerBone[w.boneIndex3] += w.weight3; totalWeight += w.weight3; if (isHeadBone[w.boneIndex3]) headWeight += w.weight3; }
+                        }
+                        headFraction = totalWeight > 0f ? (headWeight / totalWeight) : 0f;
+
+                        // Dominant bone (for the debug log only).
+                        int dominantIdx = 0;
+                        float maxW = totalPerBone[0];
+                        for (int i = 1; i < totalPerBone.Length; i++)
+                        {
+                            if (totalPerBone[i] > maxW) { maxW = totalPerBone[i]; dominantIdx = i; }
+                        }
+                        if (dominantIdx >= 0 && dominantIdx < bones.Length && bones[dominantIdx] != null)
+                        {
+                            dominantBoneName = bones[dominantIdx].name;
+                        }
+
+                        classifiedByBone = totalWeight > 0f;
+                        // 30% threshold: catches earrings / collars /
+                        // back-of-head pieces that span head + shoulder.
+                        // Empirically a part dominated by Spine but with
+                        // 30%+ Head weight is visually a head-region
+                        // ornament and should disappear when the Head
+                        // slot gets swapped.
+                        if (classifiedByBone)
+                        {
+                            if (headFraction >= 0.30f) headParts.Add(n);
+                            else bodyParts.Add(n);
+                        }
+                        partDebug.Add($"{n}@{dominantBoneName}(headW={headFraction:P0})");
+                    }
+
+                    // Track bounds.center.y for fallback or unclassified parts.
+                    Vector3 worldCentre = smr.transform.localToWorldMatrix.MultiplyPoint3x4(mesh.bounds.center);
+                    fallbackY[n] = worldCentre.y;
+                    if (worldCentre.y < minY) minY = worldCentre.y;
+                    if (worldCentre.y > maxY) maxY = worldCentre.y;
+
+                    if (!classifiedByBone)
+                    {
+                        // Defer — we don't know span yet. We'll process the
+                        // unclassified ones in a second pass below.
+                        partDebug.Add($"{n}@(no bone weights)");
+                    }
+                }
+
+                if (fallbackY.Count == 0)
+                {
+                    Debug.LogWarning($"[CustomizeSceneSetup] No SkinnedMeshRenderer parts found in '{fbxPath}' — '{charId}' will have no slot entries.");
+                    continue;
+                }
+
+                // Second pass: anything we couldn't classify by bone weight
+                // gets the old bounding-box treatment.
+                float span = maxY - minY;
+                float cutoffY = minY + span * HeadCutoffRatio;
+                foreach (var kv in fallbackY)
+                {
+                    if (headParts.Contains(kv.Key) || bodyParts.Contains(kv.Key)) continue;
+                    if (span > 1e-4f && kv.Value >= cutoffY) headParts.Add(kv.Key);
+                    else bodyParts.Add(kv.Key);
+                }
+
+                if (headParts.Count > 0)
                 {
                     entries.Add(new CharacterPartCatalog.Entry
                     {
                         sourceCharacterId = charId,
                         displayName = display,
-                        slot = map.Slot,
-                        partNames = map.PartNames,
-                        combinesBodyAndPants = map.CombinesBodyAndPants,
+                        slot = CharacterPartSlot.Head,
+                        partNames = headParts.ToArray(),
+                        combinesBodyAndPants = false,
                     });
                 }
+                if (bodyParts.Count > 0)
+                {
+                    entries.Add(new CharacterPartCatalog.Entry
+                    {
+                        sourceCharacterId = charId,
+                        displayName = display,
+                        slot = CharacterPartSlot.Body,
+                        partNames = bodyParts.ToArray(),
+                        combinesBodyAndPants = false,
+                    });
+                }
+
+                Debug.Log($"[CustomizeSceneSetup] '{charId}' → Head={headParts.Count} ({string.Join(",", headParts)}) | " +
+                          $"Body={bodyParts.Count} ({string.Join(",", bodyParts)}) | " +
+                          $"classification: {string.Join("; ", partDebug)} | " +
+                          $"Y range [{minY:F2}, {maxY:F2}] fallback cutoff {cutoffY:F2}");
             }
             catalog.entries = entries.ToArray();
 
             EditorUtility.SetDirty(catalog);
-            Debug.Log($"[CustomizeSceneSetup] CharacterPartCatalog rebuilt — {entries.Count} entries.");
+            Debug.Log($"[CustomizeSceneSetup] CharacterPartCatalog rebuilt — {entries.Count} entries (bone-weight dominant classification, Y fallback @ ratio {HeadCutoffRatio}).");
         }
 
         // Master rig — every other variant uses this character's FBX as its

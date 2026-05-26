@@ -19,33 +19,55 @@ MonoBehaviour:
     slot: 0
     partNames:
     - part_0.001
-    - part_2.001
+    - part_1.001
     - part_4.001
     - part_6.001
-    - part_8.001
     combinesBodyAndPants: 0
   - sourceCharacterId: Default3D
     displayName: "\u9810\u8A2D\u5C0F\u4EBA"
     slot: 1
     partNames:
-    - part_1.001
+    - part_2.001
     - part_3.001
     - part_5.001
     - part_7.001
+    - part_8.001
     - part_9.001
     - part_10.001
     - part_11.001
     - part_12.001
+    - part_13.001
+    combinesBodyAndPants: 0
+  - sourceCharacterId: Style3
+    displayName: "\u85CD\u896F\u886B\u9020\u578B"
+    slot: 0
+    partNames:
+    - part_0.001
+    - part_3.001
+    - part_10.001
+    combinesBodyAndPants: 0
+  - sourceCharacterId: Style3
+    displayName: "\u85CD\u896F\u886B\u9020\u578B"
+    slot: 1
+    partNames:
+    - part_1.001
+    - part_2.001
+    - part_4.001
+    - part_5.001
+    - part_6.001
+    - part_7.001
+    - part_8.001
+    - part_9.001
     combinesBodyAndPants: 0
   - sourceCharacterId: JayPartial
     displayName: "Jay \u9020\u578B"
     slot: 0
     partNames:
     - part_0.001
-    - part_7.001
+    - part_4.001
     - part_8.001
     - part_9.001
-    - part_10.001
+    - part_11.001
     combinesBodyAndPants: 0
   - sourceCharacterId: JayPartial
     displayName: "Jay \u9020\u578B"
@@ -54,29 +76,10 @@ MonoBehaviour:
     - part_1.001
     - part_2.001
     - part_3.001
-    - part_4.001
     - part_5.001
     - part_6.001
-    - part_11.001
-    - part_12.001
-    combinesBodyAndPants: 0
-  - sourceCharacterId: Style3
-    displayName: "\u85CD\u896F\u886B\u9020\u578B"
-    slot: 0
-    partNames:
-    - part_0.001
-    - part_1.001
-    - part_2.001
     - part_7.001
-    combinesBodyAndPants: 0
-  - sourceCharacterId: Style3
-    displayName: "\u85CD\u896F\u886B\u9020\u578B"
-    slot: 1
-    partNames:
-    - part_3.001
-    - part_4.001
-    - part_5.001
-    - part_6.001
-    - part_8.001
-    - part_9.001
+    - part_10.001
+    - part_12.001
+    - part_13.001
     combinesBodyAndPants: 0
