@@ -6,10 +6,10 @@ using UnityEngine;
 namespace CathayCrossing.HD2D.EditorTools
 {
     /// <summary>
-    /// Per-character animator wiring. Run via:
-    ///   Tools › CathayCrossing › Setup Default Character
-    ///   Tools › CathayCrossing › Setup Jay Character
-    ///   Tools › CathayCrossing › Setup All Characters
+    /// Per-character animator wiring. Invoked from
+    /// <see cref="CustomizeSceneSetup.ImportPartials"/> via the public
+    /// <see cref="SetupCharacterByName"/> entry point — one call per
+    /// imported partial FBX (Default3D / JayPartial / Style3).
     ///
     /// For each character it:
     ///  1. Reimports its rigged FBX as Humanoid (its own Avatar).
@@ -34,32 +34,20 @@ namespace CathayCrossing.HD2D.EditorTools
     /// Animation clips are SHARED across characters (Mecanim Humanoid retargets
     /// any clip onto any humanoid avatar) and live at:
     ///   Assets/Game/Characters/Animations/
-    ///     Happy Idle.fbx   (from Jay)
-    ///     Walking.fbx      (from Default)
-    ///     Running.fbx      (from Default)
-    ///     Waving.fbx       (from Default)
-    ///     Dance.fbx        (from Default)
+    ///     Happy Idle.fbx
+    ///     Walking.fbx
+    ///     Running.fbx
+    ///     Waving.fbx
+    ///     Dance.fbx
     /// </summary>
     public static class CharacterAnimatorSetup
     {
         // Per-character config so adding a third one is just one new entry.
         struct CharacterConfig
         {
-            public string Name;       // e.g. "Default" — folder name under Resources/Characters/
-            public string MeshFile;   // e.g. "men_rigged.fbx" — filename inside that folder
+            public string Name;       // folder name under Resources/Characters/
+            public string MeshFile;   // FBX filename inside that folder
         }
-
-        static readonly CharacterConfig Default = new CharacterConfig
-        {
-            Name     = "Default",
-            MeshFile = "men_rigged.fbx",
-        };
-
-        static readonly CharacterConfig Jay = new CharacterConfig
-        {
-            Name     = "Jay",
-            MeshFile = "men_jay.fbx",
-        };
 
         const string IdleClipFile   = "Happy Idle.fbx";
         const string WalkClipFile   = "Walking.fbx";
@@ -82,85 +70,15 @@ namespace CathayCrossing.HD2D.EditorTools
 
         const float IdleSpeedThreshold = 0.1f;
 
-        // ─── Menu items ─────────────────────────────────────────────────────
+        // ─── Public entry point ─────────────────────────────────────────────
 
-        [MenuItem("Tools/CathayCrossing/Setup Default Character")]
-        public static void SetupDefault() { SetupCharacter(Default); }
-
-        [MenuItem("Tools/CathayCrossing/Setup Jay Character")]
-        public static void SetupJay()     { SetupCharacter(Jay); }
-
-        [MenuItem("Tools/CathayCrossing/Setup All Characters")]
-        public static void SetupAll()
-        {
-            SetupCharacter(Default);
-            SetupCharacter(Jay);
-            CleanUpLegacyAnimationDirs();
-        }
-
-        // Public entry so other editor tools (CustomizeSceneSetup) can run
-        // the full per-character pipeline (humanoid + texture extraction +
-        // URP conversion + per-character animator controller) on FBX files
-        // they imported themselves. The folder/file naming convention is the
-        // same as the built-in Default/Jay paths:
-        //   Assets/Resources/Characters/&lt;folderName&gt;/&lt;meshFileName&gt;
+        // Called by CustomizeSceneSetup.ImportPartials for each FBX it
+        // copies into Resources/Characters/<folderName>/<meshFileName>.
+        // The folder/file naming convention is the same one SetupCharacter
+        // expects.
         public static void SetupCharacterByName(string folderName, string meshFileName)
         {
             SetupCharacter(new CharacterConfig { Name = folderName, MeshFile = meshFileName });
-        }
-
-        // Standalone cleanup hook so the chore can be invoked without rebuilding
-        // controllers. Useful when the shared-anims migration has already run
-        // and only stragglers remain.
-        [MenuItem("Tools/CathayCrossing/Clean Up Legacy Per-Character Animations")]
-        public static void CleanUpLegacyAnimationDirsMenu() => CleanUpLegacyAnimationDirs();
-
-        // Every per-character Animations/ folder is now redundant — clips live
-        // under SharedAnimDir. AssetDatabase.DeleteAsset bypasses the host
-        // filesystem permission problem (Unity manages the import library so it
-        // can remove the asset even when raw rm can't).
-        static void CleanUpLegacyAnimationDirs()
-        {
-            string[] legacyDirs = {
-                $"Assets/Resources/Characters/{Default.Name}/Animations",
-                $"Assets/Resources/Characters/{Jay.Name}/Animations",
-            };
-            int removed = 0;
-            foreach (var dir in legacyDirs)
-            {
-                if (AssetDatabase.IsValidFolder(dir))
-                {
-                    if (AssetDatabase.DeleteAsset(dir))
-                    {
-                        removed++;
-                        Debug.Log($"[CharacterAnimatorSetup] Removed legacy anim dir: {dir}");
-                    }
-                    else
-                    {
-                        Debug.LogWarning($"[CharacterAnimatorSetup] Failed to remove {dir}. Delete it manually in Project view.");
-                    }
-                }
-            }
-            // Also wipe any *.bak* stragglers from earlier ops in the Jay folder.
-            CleanUpBakStragglers($"Assets/Resources/Characters/{Jay.Name}");
-            CleanUpBakStragglers($"Assets/Resources/Characters/{Default.Name}");
-
-            if (removed > 0) AssetDatabase.Refresh();
-        }
-
-        static void CleanUpBakStragglers(string folder)
-        {
-            if (!AssetDatabase.IsValidFolder(folder)) return;
-            foreach (var guid in AssetDatabase.FindAssets("", new[] { folder }))
-            {
-                string p = AssetDatabase.GUIDToAssetPath(guid);
-                string name = Path.GetFileName(p);
-                if (name.Contains(".bak"))
-                {
-                    if (AssetDatabase.DeleteAsset(p))
-                        Debug.Log($"[CharacterAnimatorSetup] Removed straggler: {p}");
-                }
-            }
         }
 
         // ─── Per-character pipeline ────────────────────────────────────────

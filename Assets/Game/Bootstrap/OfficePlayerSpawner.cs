@@ -256,11 +256,11 @@ namespace CathayCrossing.Bootstrap
                 return null;
             }
 
-            // Each variant ships its own rig + mesh. Earlier we tried
-            // sharing Default3D's skeleton via CharacterMeshSwapper to
-            // neutralise per-variant lean, but the bindpose differences
-            // distorted the swapped meshes (arms folded, knees popping).
-            // Self-contained rigs avoid that distortion.
+            // Each variant ships its own rig + mesh. The customise
+            // path uses CharacterAssembler instead, which transplants
+            // mesh parts onto a shared Default3D rig with bindpose
+            // re-targeting per-bone. This direct path is the fallback
+            // when there's no per-slot PlayerPrefs selection.
             var visual = Instantiate(def.body, parent);
             visual.name = "Visual";
             visual.transform.localPosition = Vector3.zero;

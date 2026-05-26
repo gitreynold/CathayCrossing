@@ -507,40 +507,6 @@ namespace CathayCrossing.HD2D.EditorTools
             }
         }
 
-        // ─── Legacy cleanup ─────────────────────────────────────────────────
-
-        [MenuItem("Tools/CathayCrossing/Remove Legacy Default+Jay Characters")]
-        public static void RemoveLegacyCharactersMenu()
-        {
-            bool confirm = EditorUtility.DisplayDialog(
-                "Remove legacy characters",
-                "This deletes:\n" +
-                "  Assets/Resources/Characters/Default\n" +
-                "  Assets/Resources/Characters/Jay\n\n" +
-                "Make sure the partial-based variants (Default3D / Style3 / " +
-                "JayPartial) have been imported and set up first — they each " +
-                "have their own PlayerAnimator.controller so they no longer " +
-                "depend on Default's folder.\n\nProceed?",
-                "Delete", "Cancel");
-            if (!confirm) return;
-
-            int removed = 0;
-            foreach (var dir in new[] {
-                "Assets/Resources/Characters/Default",
-                "Assets/Resources/Characters/Jay",
-            })
-            {
-                if (AssetDatabase.IsValidFolder(dir) && AssetDatabase.DeleteAsset(dir))
-                {
-                    removed++;
-                    Debug.Log($"[CustomizeSceneSetup] Removed {dir}");
-                }
-            }
-            AssetDatabase.Refresh();
-            EditorUtility.DisplayDialog("Remove legacy characters",
-                $"Removed {removed} legacy character folder(s).", "OK");
-        }
-
         // ─── CJK font asset ─────────────────────────────────────────────────
 
         // Copies Arial Unicode from macOS into the project (one-time) and
