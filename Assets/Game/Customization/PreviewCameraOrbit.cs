@@ -43,7 +43,13 @@ namespace CathayCrossing.Customization
         public float maxDistance = 6f;
 
         [Header("Feel")]
-        public float dragSensitivity = 0.25f;
+        // 2026-05-26 v3: bumped to 1.0°/px so very short drags spin the
+        // preview a lot. Customize-scene rail is on the right; players
+        // have less horizontal travel room when dragging from the left
+        // of the screen, so a higher per-pixel rate cuts down on having
+        // to re-click and re-drag for a 180° spin. Matches the office
+        // camera's dragSensitivity.
+        public float dragSensitivity = 1.0f;
         public float scrollSensitivity = 0.25f;
 
         bool _dragging;

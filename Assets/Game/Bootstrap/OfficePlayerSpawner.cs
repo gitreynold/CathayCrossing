@@ -415,17 +415,43 @@ namespace CathayCrossing.Bootstrap
             bool fresh = oc == null;
             if (fresh) oc = target.gameObject.AddComponent<OctopathCamera>();
             oc.target = follow;
-            if (fresh)
-            {
-                oc.targetOffset = new Vector3(0f, 1.0f, 0f);
-                oc.pitch = 28f;
-                oc.yaw = 0f;
-                oc.distance = 9f;
-                oc.fov = 30f;
-                oc.allowMouseOrbit = false;
-                oc.allowScrollZoom = true;
-                oc.SyncTargetsFromFields();
-            }
+
+            // Office camera policy (2026-05-26 v3):
+            //   • Distance LOCKED at 6 (minDistance). Scroll-zoom off.
+            //   • Pitch LOCKED at 30° (slight downward tilt — looking
+            //     at the character at an angle rather than overhead).
+            //   • Yaw FREE — right-click drag rotates around the
+            //     character 360°. dragSensitivity = 1.0°/px so a short
+            //     drag covers a wide arc.
+            //   • Rotation smoothing OFF (the cursor pushes the camera
+            //     1:1, no lag). OctopathCamera handles smoothTime=0
+            //     gracefully (no NaN — see its LateUpdate).
+            //
+            // We always overwrite these (no "fresh" gate) so a stale
+            // OctopathCamera attached to the scene picks up the new
+            // policy when the player respawns.
+            oc.targetOffset = new Vector3(0f, 1.0f, 0f);
+            oc.minDistance = 6f;
+            oc.maxDistance = 12f;
+            oc.pitch = 30f;
+            if (fresh) oc.yaw = 0f;
+            oc.distance = 6f;
+            oc.fov = 30f;
+            oc.allowMouseOrbit = true;
+            oc.allowScrollZoom = false;
+            oc.lockPitch = true;
+            oc.dragSensitivity = 1.0f;
+            // Both smoothings off → identical math to the customize
+            // scene's PreviewCameraOrbit. With smoothing on, the
+            // camera's catch-up lag against the player's per-frame
+            // micro-moves (idle Animator sway, root drift) read as
+            // visible "shake" when the user is also dragging to
+            // rotate. Zero smoothing locks the camera rigidly to the
+            // player → rotation feels solid like in the customize
+            // scene where the target never moves.
+            oc.rotationSmoothTime = 0f;
+            oc.positionSmoothTime = 0f;
+            oc.SyncTargetsFromFields();
         }
     }
 }
