@@ -52,11 +52,18 @@ namespace CathayCrossing.HD2D
                  "horizontally.")]
         public bool lockPitch = false;
 
+        [Header("Diagnostics")]
+        [Tooltip("Logs the per-frame Mouse.delta vs computed position " +
+                 "delta during drag. Useful to see Unity InputSystem's " +
+                 "internal scaling factor.")]
+        public bool logDeltaDiagnostics = false;
+
         Camera _cam;
         Vector3 _posVel;
         float _yawVel, _pitchVel;
         float _yawTarget, _pitchTarget, _distTarget;
         bool _dragging;
+        Vector2 _prevMousePos;
 
         void Awake()
         {
@@ -148,19 +155,26 @@ namespace CathayCrossing.HD2D
             var mouse = Mouse.current;
             if (mouse == null) return;
 
+            Vector2 currentPos = mouse.position.ReadValue();
+
             // Match PreviewCameraOrbit's input model:
             //   • Either left OR right mouse button starts a drag.
             //   • Drag continues until both buttons are released.
-            //   • Pointer-over-UI on the press frame cancels the drag
-            //     so HUD buttons stay clickable.
-            // Previously we required rightButton specifically, which
-            // didn't match what players expected after using the
-            // customize scene's preview where any drag works.
+            //   • Pointer-over-UI on press cancels the drag so HUD
+            //     buttons stay clickable.
+            //   • Delta is computed from Mouse.position differencing,
+            //     NOT from Mouse.delta.ReadValue() — Unity InputSystem
+            //     scales the latter ~0.3-0.5× internally, which made
+            //     older sensitivities feel sluggish.
             if (allowMouseOrbit)
             {
                 if (mouse.leftButton.wasPressedThisFrame || mouse.rightButton.wasPressedThisFrame)
                 {
-                    if (!IsPointerOverUi()) _dragging = true;
+                    if (!IsPointerOverUi())
+                    {
+                        _dragging = true;
+                        _prevMousePos = currentPos;
+                    }
                 }
                 if (!mouse.leftButton.isPressed && !mouse.rightButton.isPressed)
                 {
@@ -168,15 +182,19 @@ namespace CathayCrossing.HD2D
                 }
                 if (_dragging)
                 {
-                    // Direct delta × sensitivity. 1 pixel of mouse
-                    // movement → dragSensitivity degrees of yaw/pitch.
-                    // No Time.deltaTime — would make it frame-rate
-                    // dependent.
-                    Vector2 d = mouse.delta.ReadValue();
+                    Vector2 d = currentPos - _prevMousePos;
                     _yawTarget += d.x * dragSensitivity;
                     if (!lockPitch)
                     {
                         _pitchTarget = Mathf.Clamp(_pitchTarget - d.y * dragSensitivity, 15f, 75f);
+                    }
+
+                    if (logDeltaDiagnostics)
+                    {
+                        Vector2 inputSystemDelta = mouse.delta.ReadValue();
+                        Debug.Log($"[OctopathCamera] pos-delta={d} (mag={d.magnitude:F2})  " +
+                                  $"Mouse.delta={inputSystemDelta} (mag={inputSystemDelta.magnitude:F2})  " +
+                                  $"ratio={(inputSystemDelta.magnitude > 0.01f ? d.magnitude / inputSystemDelta.magnitude : 0f):F2}×");
                     }
                 }
             }
@@ -184,6 +202,7 @@ namespace CathayCrossing.HD2D
             {
                 _dragging = false;
             }
+            _prevMousePos = currentPos;
 
             if (allowScrollZoom)
             {

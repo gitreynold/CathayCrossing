@@ -440,6 +440,10 @@ namespace CathayCrossing.Bootstrap
             oc.allowMouseOrbit = true;
             oc.allowScrollZoom = false;
             oc.lockPitch = true;
+            // dragSensitivity = 1°/px on raw position delta. Previous
+            // values (2.0+) were tuned for the scaled Mouse.delta path;
+            // position-based delta is roughly 2-3× larger, so 1.0 here
+            // feels equivalent to the old ~2-3.
             oc.dragSensitivity = 1.0f;
             // Both smoothings off → identical math to the customize
             // scene's PreviewCameraOrbit. With smoothing on, the

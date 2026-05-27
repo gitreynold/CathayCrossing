@@ -43,16 +43,25 @@ namespace CathayCrossing.Customization
         public float maxDistance = 6f;
 
         [Header("Feel")]
-        // 2026-05-26 v3: bumped to 1.0°/px so very short drags spin the
-        // preview a lot. Customize-scene rail is on the right; players
-        // have less horizontal travel room when dragging from the left
-        // of the screen, so a higher per-pixel rate cuts down on having
-        // to re-click and re-drag for a 180° spin. Matches the office
-        // camera's dragSensitivity.
+        // 2026-05-26 v11: now consumes Mouse.position deltas computed
+        // here, not Mouse.delta.ReadValue() — Unity InputSystem scales
+        // the latter by an internal factor (~0.3–0.5×), which is why
+        // older versions had sensitivity values pushed up to 60 just
+        // to feel snappy. Position-based deltas are raw screen pixels,
+        // so a sensitivity of 1.0 means "1° rotation per pixel of
+        // mouse movement". A 90-pixel drag now spins 90°. Bump up if
+        // you want flicks; bump down for finer control.
         public float dragSensitivity = 1.0f;
         public float scrollSensitivity = 0.25f;
 
+        [Header("Diagnostics")]
+        [Tooltip("Logs Mouse.delta vs the computed position-based delta " +
+                 "once per frame during drag, so you can see the InputSystem " +
+                 "scaling factor in Console. Turn off in production.")]
+        public bool logDeltaDiagnostics = false;
+
         bool _dragging;
+        Vector2 _prevMousePos;
 
         void LateUpdate()
         {
@@ -65,11 +74,19 @@ namespace CathayCrossing.Customization
             var mouse = Mouse.current;
             if (mouse == null) return;
 
+            Vector2 currentPos = mouse.position.ReadValue();
+
             // Press → start dragging, but ignore if pointer is over UI so the
-            // variant buttons stay clickable.
+            // variant buttons stay clickable. Reset _prevMousePos so the
+            // first frame's delta is 0 (not "wherever the cursor moved while
+            // we weren't dragging").
             if (mouse.leftButton.wasPressedThisFrame || mouse.rightButton.wasPressedThisFrame)
             {
-                if (!IsPointerOverUi()) _dragging = true;
+                if (!IsPointerOverUi())
+                {
+                    _dragging = true;
+                    _prevMousePos = currentPos;
+                }
             }
             if (mouse.leftButton.wasReleasedThisFrame && mouse.rightButton.wasReleasedThisFrame)
             {
@@ -80,11 +97,25 @@ namespace CathayCrossing.Customization
 
             if (_dragging)
             {
-                Vector2 delta = mouse.delta.ReadValue();
+                // Position-based delta. Mouse.delta.ReadValue() goes
+                // through InputSystem's internal scaling (~0.3-0.5×),
+                // which makes high-DPI / high-polling-rate setups feel
+                // sluggish. Differencing Mouse.position frame-to-frame
+                // sidesteps that — we get raw screen pixels.
+                Vector2 delta = currentPos - _prevMousePos;
                 yaw   += delta.x * dragSensitivity;
                 pitch -= delta.y * dragSensitivity;
                 pitch = Mathf.Clamp(pitch, minPitch, maxPitch);
+
+                if (logDeltaDiagnostics)
+                {
+                    Vector2 inputSystemDelta = mouse.delta.ReadValue();
+                    Debug.Log($"[PreviewCameraOrbit] pos-delta={delta} (mag={delta.magnitude:F2})  " +
+                              $"Mouse.delta={inputSystemDelta} (mag={inputSystemDelta.magnitude:F2})  " +
+                              $"ratio={(inputSystemDelta.magnitude > 0.01f ? delta.magnitude / inputSystemDelta.magnitude : 0f):F2}×");
+                }
             }
+            _prevMousePos = currentPos;
 
             // Scroll wheel zoom — Mouse.scroll.y is ±120 per notch.
             float scroll = mouse.scroll.ReadValue().y;
