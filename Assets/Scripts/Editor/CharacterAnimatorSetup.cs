@@ -116,9 +116,9 @@ namespace CathayCrossing.HD2D.EditorTools
             ConfigureClipAsHumanoid(runPath,   isLoopable: true);
             ConfigureClipAsHumanoid(wavePath,  isLoopable: false);
             ConfigureClipAsHumanoid(dancePath, isLoopable: false);
-            ConfigureClipAsHumanoid(sitDownPath,  isLoopable: false);
+            ConfigureClipAsHumanoid(sitDownPath,  isLoopable: false, bakeRootHeightY: true);
             ConfigureClipAsHumanoid(sitTypePath,  isLoopable: true);
-            ConfigureClipAsHumanoid(sitStandPath, isLoopable: false);
+            ConfigureClipAsHumanoid(sitStandPath, isLoopable: false, bakeRootHeightY: true);
 
             var idleClip  = LoadFirstAnimationClip(idlePath);
             var walkClip  = LoadFirstAnimationClip(walkPath);
@@ -180,9 +180,11 @@ namespace CathayCrossing.HD2D.EditorTools
             ConfigureClipAsHumanoid(wavePath,  isLoopable: false);
             ConfigureClipAsHumanoid(dancePath, isLoopable: false);
             // Stand→Sit and Sit→Stand are one-shot; the seated typing loops.
-            ConfigureClipAsHumanoid(sitDownPath,  isLoopable: false);
+            // The two transitions bake Y so the body actually rises/lowers and
+            // the feet stay grounded (see ConfigureClipAsHumanoid remarks).
+            ConfigureClipAsHumanoid(sitDownPath,  isLoopable: false, bakeRootHeightY: true);
             ConfigureClipAsHumanoid(sitTypePath,  isLoopable: true);
-            ConfigureClipAsHumanoid(sitStandPath, isLoopable: false);
+            ConfigureClipAsHumanoid(sitStandPath, isLoopable: false, bakeRootHeightY: true);
 
             var idleClip  = LoadFirstAnimationClip(idlePath);
             var walkClip  = LoadFirstAnimationClip(walkPath);
@@ -402,7 +404,15 @@ namespace CathayCrossing.HD2D.EditorTools
             if (dirty) importer.SaveAndReimport();
         }
 
-        static void ConfigureClipAsHumanoid(string fbxPath, bool isLoopable)
+        // bakeRootHeightY: when true, bakes Root Transform Position (Y) into the
+        // pose (Based Upon = Original). Needed for the stand↔sit transition
+        // clips: their hips travel a large vertical distance, and with
+        // applyRootMotion=false (movement is CharacterController-driven) that
+        // vertical motion would otherwise be discarded as root motion — leaving
+        // the body stuck at standing height (floating while seated, legs poking
+        // through the floor while standing). The seated typing loop has near-zero
+        // vertical travel so it stays unbaked.
+        static void ConfigureClipAsHumanoid(string fbxPath, bool isLoopable, bool bakeRootHeightY = false)
         {
             if (!File.Exists(fbxPath))
             {
@@ -427,6 +437,12 @@ namespace CathayCrossing.HD2D.EditorTools
                     if (isLoopable && !c.loopPose) { c.loopPose = true; dirty = true; }
                     if (!c.lockRootPositionXZ) { c.lockRootPositionXZ = true; dirty = true; }
                     if (!c.lockRootRotation)   { c.lockRootRotation   = true; dirty = true; }
+                    if (c.lockRootHeightY != bakeRootHeightY) { c.lockRootHeightY = bakeRootHeightY; dirty = true; }
+                    if (bakeRootHeightY)
+                    {
+                        if (!c.keepOriginalPositionY) { c.keepOriginalPositionY = true; dirty = true; }
+                        if (c.heightFromFeet)         { c.heightFromFeet = false;        dirty = true; }
+                    }
                     clipSettings[i] = c;
                 }
                 importer.clipAnimations = clipSettings;
