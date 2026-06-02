@@ -54,6 +54,13 @@ namespace CathayCrossing.HD2D.EditorTools
         const string RunClipFile    = "Running.fbx";
         const string WaveClipFile   = "Waving.fbx";
         const string DanceClipFile  = "Dance.fbx";
+        // Seated set (added 2026-06): Stand→Sit transition, seated typing loop,
+        // and Sit→Stand transition. Stand_To_Sit / Sit_To_Stand are one-shot;
+        // Sit_Typing loops. Stand_To_Sit holds its last frame as the seated
+        // idle pose (no auto-exit), so no separate sit-idle clip is needed.
+        const string SitDownClipFile  = "Stand_To_Sit.fbx";
+        const string SitTypeClipFile  = "Sit_Typing.fbx";
+        const string SitStandClipFile = "Sit_To_Stand.fbx";
 
         // Mecanim Humanoid retargets a single clip onto any humanoid avatar, so
         // every character shares one animation set. Curated picks (per request):
@@ -67,6 +74,11 @@ namespace CathayCrossing.HD2D.EditorTools
         const string IsRunningParam = "IsRunning";
         const string WaveParam      = "Wave";
         const string DanceParam     = "Dance";
+        // Seated bools driven by OctopathPlayerController. Sit gates the
+        // Stand→Sit / Sit→Stand transitions; Typing toggles the seated
+        // typing loop while Sit stays true.
+        const string SitParam       = "Sit";
+        const string TypingParam    = "Typing";
 
         const float IdleSpeedThreshold = 0.1f;
 
@@ -79,6 +91,56 @@ namespace CathayCrossing.HD2D.EditorTools
         public static void SetupCharacterByName(string folderName, string meshFileName)
         {
             SetupCharacter(new CharacterConfig { Name = folderName, MeshFile = meshFileName });
+        }
+
+        // Rebuilds ONLY the PlayerAnimator.controller for an existing character
+        // folder — no FBX reimport, no texture/material extraction. Use this to
+        // refresh the animator graph (e.g. after adding the seated states)
+        // without disturbing already-working materials. Idempotent.
+        public static void RebuildControllerOnly(string folderName)
+        {
+            string charDir        = $"Assets/Resources/Characters/{folderName}";
+            string controllerPath = $"{charDir}/PlayerAnimator.controller";
+
+            string idlePath  = Path.Combine(SharedAnimDir, IdleClipFile);
+            string walkPath  = Path.Combine(SharedAnimDir, WalkClipFile);
+            string runPath   = Path.Combine(SharedAnimDir, RunClipFile);
+            string wavePath  = Path.Combine(SharedAnimDir, WaveClipFile);
+            string dancePath = Path.Combine(SharedAnimDir, DanceClipFile);
+            string sitDownPath  = Path.Combine(SharedAnimDir, SitDownClipFile);
+            string sitTypePath  = Path.Combine(SharedAnimDir, SitTypeClipFile);
+            string sitStandPath = Path.Combine(SharedAnimDir, SitStandClipFile);
+
+            ConfigureClipAsHumanoid(idlePath,  isLoopable: true);
+            ConfigureClipAsHumanoid(walkPath,  isLoopable: true);
+            ConfigureClipAsHumanoid(runPath,   isLoopable: true);
+            ConfigureClipAsHumanoid(wavePath,  isLoopable: false);
+            ConfigureClipAsHumanoid(dancePath, isLoopable: false);
+            ConfigureClipAsHumanoid(sitDownPath,  isLoopable: false);
+            ConfigureClipAsHumanoid(sitTypePath,  isLoopable: true);
+            ConfigureClipAsHumanoid(sitStandPath, isLoopable: false);
+
+            var idleClip  = LoadFirstAnimationClip(idlePath);
+            var walkClip  = LoadFirstAnimationClip(walkPath);
+            var runClip   = LoadFirstAnimationClip(runPath);
+            var waveClip  = LoadFirstAnimationClip(wavePath);
+            var danceClip = LoadFirstAnimationClip(dancePath);
+            var sitDownClip  = LoadFirstAnimationClip(sitDownPath);
+            var sitTypeClip  = LoadFirstAnimationClip(sitTypePath);
+            var sitStandClip = LoadFirstAnimationClip(sitStandPath);
+
+            if (idleClip == null || walkClip == null || runClip == null || waveClip == null || danceClip == null
+                || sitDownClip == null || sitTypeClip == null || sitStandClip == null)
+            {
+                Debug.LogError($"[CharacterAnimatorSetup] RebuildControllerOnly '{folderName}': a clip is missing in {SharedAnimDir}.");
+                return;
+            }
+
+            BuildController(controllerPath, idleClip, walkClip, runClip, waveClip, danceClip,
+                            sitDownClip, sitTypeClip, sitStandClip);
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            Debug.Log($"[CharacterAnimatorSetup] RebuildControllerOnly '{folderName}' done → {controllerPath}");
         }
 
         // ─── Per-character pipeline ────────────────────────────────────────
@@ -107,26 +169,39 @@ namespace CathayCrossing.HD2D.EditorTools
             string wavePath  = Path.Combine(animDir, WaveClipFile);
             string dancePath = Path.Combine(animDir, DanceClipFile);
 
+            string sitDownPath  = Path.Combine(animDir, SitDownClipFile);
+            string sitTypePath  = Path.Combine(animDir, SitTypeClipFile);
+            string sitStandPath = Path.Combine(animDir, SitStandClipFile);
+
             ConfigureClipAsHumanoid(idlePath,  isLoopable: true);
             ConfigureClipAsHumanoid(walkPath,  isLoopable: true);
             ConfigureClipAsHumanoid(runPath,   isLoopable: true);
             // Wave and Dance are one-shot — Animator exits to Idle via exit-time.
             ConfigureClipAsHumanoid(wavePath,  isLoopable: false);
             ConfigureClipAsHumanoid(dancePath, isLoopable: false);
+            // Stand→Sit and Sit→Stand are one-shot; the seated typing loops.
+            ConfigureClipAsHumanoid(sitDownPath,  isLoopable: false);
+            ConfigureClipAsHumanoid(sitTypePath,  isLoopable: true);
+            ConfigureClipAsHumanoid(sitStandPath, isLoopable: false);
 
             var idleClip  = LoadFirstAnimationClip(idlePath);
             var walkClip  = LoadFirstAnimationClip(walkPath);
             var runClip   = LoadFirstAnimationClip(runPath);
             var waveClip  = LoadFirstAnimationClip(wavePath);
             var danceClip = LoadFirstAnimationClip(dancePath);
+            var sitDownClip  = LoadFirstAnimationClip(sitDownPath);
+            var sitTypeClip  = LoadFirstAnimationClip(sitTypePath);
+            var sitStandClip = LoadFirstAnimationClip(sitStandPath);
 
-            if (idleClip == null || walkClip == null || runClip == null || waveClip == null || danceClip == null)
+            if (idleClip == null || walkClip == null || runClip == null || waveClip == null || danceClip == null
+                || sitDownClip == null || sitTypeClip == null || sitStandClip == null)
             {
                 Debug.LogError($"[CharacterAnimatorSetup] '{cfg.Name}' missing a clip in {animDir}.");
                 return;
             }
 
-            BuildController(controllerPath, idleClip, walkClip, runClip, waveClip, danceClip);
+            BuildController(controllerPath, idleClip, walkClip, runClip, waveClip, danceClip,
+                            sitDownClip, sitTypeClip, sitStandClip);
 
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
@@ -374,7 +449,8 @@ namespace CathayCrossing.HD2D.EditorTools
 
         // 5 states, 4 parameters — identical graph shape for every character.
         // See README block at the top of this file for the transition map.
-        static void BuildController(string controllerPath, AnimationClip idleClip, AnimationClip walkClip, AnimationClip runClip, AnimationClip waveClip, AnimationClip danceClip)
+        static void BuildController(string controllerPath, AnimationClip idleClip, AnimationClip walkClip, AnimationClip runClip, AnimationClip waveClip, AnimationClip danceClip,
+                                    AnimationClip sitDownClip, AnimationClip sitTypeClip, AnimationClip sitStandClip)
         {
             if (File.Exists(controllerPath)) AssetDatabase.DeleteAsset(controllerPath);
 
@@ -383,6 +459,8 @@ namespace CathayCrossing.HD2D.EditorTools
             controller.AddParameter(IsRunningParam, AnimatorControllerParameterType.Bool);
             controller.AddParameter(WaveParam,      AnimatorControllerParameterType.Trigger);
             controller.AddParameter(DanceParam,     AnimatorControllerParameterType.Trigger);
+            controller.AddParameter(SitParam,       AnimatorControllerParameterType.Bool);
+            controller.AddParameter(TypingParam,    AnimatorControllerParameterType.Bool);
 
             var sm = controller.layers[0].stateMachine;
 
@@ -391,6 +469,13 @@ namespace CathayCrossing.HD2D.EditorTools
             var run   = sm.AddState("Running"); run.motion   = runClip;   run.writeDefaultValues   = true;
             var wave  = sm.AddState("Waving");  wave.motion  = waveClip;  wave.writeDefaultValues  = true;
             var dance = sm.AddState("Dance");   dance.motion = danceClip; dance.writeDefaultValues = true;
+            // Seated states. SitDown (Stand_To_Sit) is one-shot and holds its
+            // last frame as the seated idle pose — no auto-exit, so the
+            // character stays seated until G is pressed again. SitTyping loops.
+            // SitStand (Sit_To_Stand) is one-shot and returns to Idle.
+            var sitDown  = sm.AddState("SitDown");   sitDown.motion  = sitDownClip;  sitDown.writeDefaultValues  = true;
+            var sitType  = sm.AddState("SitTyping"); sitType.motion  = sitTypeClip;  sitType.writeDefaultValues  = true;
+            var sitStand = sm.AddState("SitStand");  sitStand.motion = sitStandClip; sitStand.writeDefaultValues = true;
 
             sm.defaultState = idle;
 
@@ -460,6 +545,50 @@ namespace CathayCrossing.HD2D.EditorTools
             danceToIdle.hasExitTime = true;
             danceToIdle.exitTime    = 0.95f;
             danceToIdle.duration    = 0.25f;
+
+            // ── Seated graph ────────────────────────────────────────────────
+            // Enter sitting only from the grounded locomotion states so the
+            // one-shot action states (Wave/Dance) can finish first. No AnyState
+            // edge — that would re-fire while already seated/typing.
+            // Idle/Walking/Running → SitDown  (Sit becomes true via G)
+            foreach (var from in new[] { idle, walk, run })
+            {
+                var t = from.AddTransition(sitDown);
+                t.AddCondition(AnimatorConditionMode.If, 0f, SitParam);
+                t.hasExitTime = false;
+                t.duration    = kBlend;
+            }
+
+            // SitDown → SitTyping  (T pressed while seated → Typing true)
+            var sitToType = sitDown.AddTransition(sitType);
+            sitToType.AddCondition(AnimatorConditionMode.If, 0f, TypingParam);
+            sitToType.hasExitTime = false;
+            sitToType.duration    = 0.15f;
+
+            // SitTyping → SitDown  (Typing toggled off but still seated → hold sit pose)
+            var typeToSit = sitType.AddTransition(sitDown);
+            typeToSit.AddCondition(AnimatorConditionMode.IfNot, 0f, TypingParam);
+            typeToSit.AddCondition(AnimatorConditionMode.If,    0f, SitParam);
+            typeToSit.hasExitTime = false;
+            typeToSit.duration    = 0.15f;
+
+            // SitDown → SitStand   (G pressed → Sit false → stand back up)
+            var sitToStand = sitDown.AddTransition(sitStand);
+            sitToStand.AddCondition(AnimatorConditionMode.IfNot, 0f, SitParam);
+            sitToStand.hasExitTime = false;
+            sitToStand.duration    = kBlend;
+
+            // SitTyping → SitStand (G pressed straight out of typing)
+            var typeToStand = sitType.AddTransition(sitStand);
+            typeToStand.AddCondition(AnimatorConditionMode.IfNot, 0f, SitParam);
+            typeToStand.hasExitTime = false;
+            typeToStand.duration    = kBlend;
+
+            // SitStand → Idle on completion (full stand-up plays, then unlock)
+            var standToIdle = sitStand.AddTransition(idle);
+            standToIdle.hasExitTime = true;
+            standToIdle.exitTime    = 0.90f;
+            standToIdle.duration    = 0.20f;
 
             EditorUtility.SetDirty(controller);
         }
