@@ -116,9 +116,9 @@ namespace CathayCrossing.HD2D.EditorTools
             ConfigureClipAsHumanoid(runPath,   isLoopable: true);
             ConfigureClipAsHumanoid(wavePath,  isLoopable: false);
             ConfigureClipAsHumanoid(dancePath, isLoopable: false);
-            ConfigureClipAsHumanoid(sitDownPath,  isLoopable: false, bakeRootHeightY: true);
-            ConfigureClipAsHumanoid(sitTypePath,  isLoopable: true);
-            ConfigureClipAsHumanoid(sitStandPath, isLoopable: false, bakeRootHeightY: true);
+            ConfigureClipAsHumanoid(sitDownPath,  isLoopable: false, bakeRootHeightY: true,  bakeRootPositionXZ: false);
+            ConfigureClipAsHumanoid(sitTypePath,  isLoopable: true,  bakeRootHeightY: false, bakeRootPositionXZ: false);
+            ConfigureClipAsHumanoid(sitStandPath, isLoopable: false, bakeRootHeightY: true,  bakeRootPositionXZ: false);
 
             var idleClip  = LoadFirstAnimationClip(idlePath);
             var walkClip  = LoadFirstAnimationClip(walkPath);
@@ -180,11 +180,11 @@ namespace CathayCrossing.HD2D.EditorTools
             ConfigureClipAsHumanoid(wavePath,  isLoopable: false);
             ConfigureClipAsHumanoid(dancePath, isLoopable: false);
             // Stand→Sit and Sit→Stand are one-shot; the seated typing loops.
-            // The two transitions bake Y so the body actually rises/lowers and
-            // the feet stay grounded (see ConfigureClipAsHumanoid remarks).
-            ConfigureClipAsHumanoid(sitDownPath,  isLoopable: false, bakeRootHeightY: true);
-            ConfigureClipAsHumanoid(sitTypePath,  isLoopable: true);
-            ConfigureClipAsHumanoid(sitStandPath, isLoopable: false, bakeRootHeightY: true);
+            // bakeRootHeightY: true  → body actually rises/lowers, feet grounded.
+            // bakeRootPositionXZ: false → no horizontal drift (stay put on T / stand-up).
+            ConfigureClipAsHumanoid(sitDownPath,  isLoopable: false, bakeRootHeightY: true,  bakeRootPositionXZ: false);
+            ConfigureClipAsHumanoid(sitTypePath,  isLoopable: true,  bakeRootHeightY: false, bakeRootPositionXZ: false);
+            ConfigureClipAsHumanoid(sitStandPath, isLoopable: false, bakeRootHeightY: true,  bakeRootPositionXZ: false);
 
             var idleClip  = LoadFirstAnimationClip(idlePath);
             var walkClip  = LoadFirstAnimationClip(walkPath);
@@ -412,7 +412,13 @@ namespace CathayCrossing.HD2D.EditorTools
         // the body stuck at standing height (floating while seated, legs poking
         // through the floor while standing). The seated typing loop has near-zero
         // vertical travel so it stays unbaked.
-        static void ConfigureClipAsHumanoid(string fbxPath, bool isLoopable, bool bakeRootHeightY = false)
+        // bakeRootPositionXZ: when true (default, matches walk/idle/run), the
+        // horizontal motion is baked into the pose. The seated clips pass FALSE
+        // so their horizontal root translation (the lean-back when sitting, the
+        // step-forward when standing) is treated as root motion and DISCARDED
+        // (applyRootMotion=false) — otherwise the body slides forward on T and
+        // backward on stand-up. With it off the GameObject stays put.
+        static void ConfigureClipAsHumanoid(string fbxPath, bool isLoopable, bool bakeRootHeightY = false, bool bakeRootPositionXZ = true)
         {
             if (!File.Exists(fbxPath))
             {
@@ -435,7 +441,8 @@ namespace CathayCrossing.HD2D.EditorTools
                     var c = clipSettings[i];
                     if (c.loopTime != isLoopable) { c.loopTime = isLoopable; dirty = true; }
                     if (isLoopable && !c.loopPose) { c.loopPose = true; dirty = true; }
-                    if (!c.lockRootPositionXZ) { c.lockRootPositionXZ = true; dirty = true; }
+                    if (c.lockRootPositionXZ != bakeRootPositionXZ) { c.lockRootPositionXZ = bakeRootPositionXZ; dirty = true; }
+                    if (!bakeRootPositionXZ && !c.keepOriginalPositionXZ) { c.keepOriginalPositionXZ = true; dirty = true; }
                     if (!c.lockRootRotation)   { c.lockRootRotation   = true; dirty = true; }
                     if (c.lockRootHeightY != bakeRootHeightY) { c.lockRootHeightY = bakeRootHeightY; dirty = true; }
                     if (bakeRootHeightY)
