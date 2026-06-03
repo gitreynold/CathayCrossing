@@ -46,6 +46,14 @@ namespace CathayCrossing.HD2D
                  "effect when standing.")]
         public Key typeKey = Key.T;
 
+        [Tooltip("Only let the player sit when within this distance of a chair. " +
+                 "Set <= 0 to disable the proximity gate.")]
+        public float sitRange = 1.5f;
+        [Tooltip("A GameObject counts as a chair seat when it carries this " +
+                 "tag. The tag must exist in the Tag Manager.")]
+        public string chairTag = "Chair";
+
+
         [Header("Collision")]
         public float colliderHeight = 1.6f;
         public float colliderRadius = 0.35f;
@@ -284,7 +292,7 @@ namespace CathayCrossing.HD2D
                 {
                     // Stand → sit. Ignore if we're still mid stand-up so a
                     // stray G doesn't bounce the character back down.
-                    if (!inSeatedState)
+                    if (!inSeatedState && IsNearChair())
                     {
                         _sitMode = true;
                         _typing  = false;
@@ -335,6 +343,35 @@ namespace CathayCrossing.HD2D
             }
             return false;
         }
+
+        // True when a chair (GameObject whose name contains chairNameContains)
+        // sits within sitRange of the player. Only evaluated on the G keypress
+        // that initiates sitting, so the per-frame cost is zero. A non-positive
+        // sitRange disables the gate (sit anywhere).
+        // True when a GameObject tagged chairTag sits within sitRange of the
+        // player. Only evaluated on the G keypress that initiates sitting, so
+        // the per-frame cost is zero. A non-positive sitRange disables the
+        // gate (sit anywhere).
+        bool IsNearChair()
+        {
+            if (sitRange <= 0f || string.IsNullOrEmpty(chairTag)) return true;
+
+            GameObject[] chairs;
+            try { chairs = GameObject.FindGameObjectsWithTag(chairTag); }
+            catch (UnityException) { return true; } // tag not defined → don't block
+
+            float bestSqr = sitRange * sitRange;
+            Vector3 me = transform.position;
+            for (int i = 0; i < chairs.Length; i++)
+            {
+                // Compare on the XZ plane so chair height doesn't matter.
+                Vector3 d = chairs[i].transform.position - me; d.y = 0f;
+                if (d.sqrMagnitude <= bestSqr) return true;
+            }
+            return false;
+        }
+
+
 
         public void Wave()
         {

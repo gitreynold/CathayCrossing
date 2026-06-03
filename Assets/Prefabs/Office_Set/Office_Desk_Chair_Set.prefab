@@ -85,6 +85,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Office_Chair
       objectReference: {fileID: 0}
+    - target: {fileID: 6156902042414624892, guid: e2be2540bc308488184fa9954fda192e, type: 3}
+      propertyPath: m_TagString
+      value: Chair
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
