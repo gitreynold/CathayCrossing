@@ -20,6 +20,11 @@ namespace CathayCrossing.Bootstrap
         public string officeSceneName = "OfficeScene";
         public int npcCount = 1;
 
+        [Tooltip("Spawn Snoopy at the player's spawn position (the spot shown on screen) instead of a random floor tile. It still wanders randomly from there.")]
+        public bool spawnAtPlayer = true;
+        [Tooltip("How far to the side of the player Snoopy appears, so they don't overlap on spawn.")]
+        public float spawnOffsetFromPlayer = 1.8f;
+
         const string NpcObjectPrefix = "__OfficeNpc_Snoopy";
         const string FbxResource     = "NPC/Snoopy/Snoopy";
         const string CtrlResource    = "NPC/Snoopy/SnoopyAnimator";
@@ -72,10 +77,33 @@ namespace CathayCrossing.Bootstrap
                 floor = new Bounds(Vector3.zero, new Vector3(8, 0, 8));
             }
 
+            // Default spawn anchor: the player's position (the spot shown on
+            // screen). The player is spawned *before* us (OfficeNpcSpawner is
+            // registered last in GameInfraBootstrap), so it already exists.
+            // Falls back to a random floor tile when no player is found.
+            Vector3 anchor = floor.center;
+            bool haveAnchor = spawnAtPlayer && TryGetPlayerPosition(scene, out anchor);
+
             for (int i = 0; i < Mathf.Max(1, npcCount); i++)
             {
-                float sx = Random.Range(floor.min.x + 1.5f, floor.max.x - 1.5f);
-                float sz = Random.Range(floor.min.z + 1.5f, floor.max.z - 1.5f);
+                float sx, sz;
+                if (haveAnchor)
+                {
+                    // Sit just to the side of the player so they don't overlap,
+                    // then let NpcWanderController roam from here.
+                    float a = Random.value * Mathf.PI * 2f;
+                    sx = anchor.x + Mathf.Cos(a) * spawnOffsetFromPlayer;
+                    sz = anchor.z + Mathf.Sin(a) * spawnOffsetFromPlayer;
+                    // Keep inside the floor so we don't land in a wall.
+                    sx = Mathf.Clamp(sx, floor.min.x + 1.5f, floor.max.x - 1.5f);
+                    sz = Mathf.Clamp(sz, floor.min.z + 1.5f, floor.max.z - 1.5f);
+                }
+                else
+                {
+                    sx = Random.Range(floor.min.x + 1.5f, floor.max.x - 1.5f);
+                    sz = Random.Range(floor.min.z + 1.5f, floor.max.z - 1.5f);
+                }
+
                 float sy = floor.max.y;
                 if (Physics.Raycast(new Vector3(sx, floor.max.y + 5f, sz), Vector3.down,
                                     out RaycastHit hit, 20f) &&
@@ -143,6 +171,29 @@ namespace CathayCrossing.Bootstrap
                 for (int i = 0; i < mats.Length; i++) mats[i] = _npcMaterial;
                 r.sharedMaterials = mats;
             }
+        }
+
+        // Locate the spawned player so Snoopy can start at the same spot.
+        // Matches OfficePlayerSpawner's object name first, then the Player tag.
+        static bool TryGetPlayerPosition(Scene scene, out Vector3 pos)
+        {
+            pos = Vector3.zero;
+            foreach (var root in scene.GetRootGameObjects())
+            {
+                if (root.name == "__OfficePlayer" || root.CompareTag("Player"))
+                {
+                    pos = root.transform.position;
+                    return true;
+                }
+            }
+            // Player not in this scene's roots — try a global lookup.
+            var tagged = GameObject.FindGameObjectWithTag("Player");
+            if (tagged != null)
+            {
+                pos = tagged.transform.position;
+                return true;
+            }
+            return false;
         }
 
         static bool ComputeFloorBounds(Scene scene, out Bounds bounds)
