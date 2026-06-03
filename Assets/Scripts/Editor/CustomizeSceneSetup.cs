@@ -774,13 +774,17 @@ namespace CathayCrossing.HD2D.EditorTools
             var variantTemplate = MakeVariantButtonTemplate(rail.transform, cjkFont);
 
             // ─── Confirm button ─────────────────────────────────────────
+            // Parented INSIDE the rail and horizontally stretched so its edges
+            // line up with the two option columns above it. Grid sits at
+            // [16 .. 16 + 2*150 + 12] = [16 .. 328] inside the 360-wide rail,
+            // so the button uses left inset 16 and right inset 32 (== 360-328).
             var confirmGo = new GameObject("ConfirmButton", typeof(RectTransform), typeof(Image), typeof(Button));
-            confirmGo.transform.SetParent(canvas.transform, false);
+            confirmGo.transform.SetParent(rail.transform, false);
             var cRt = (RectTransform)confirmGo.transform;
-            cRt.anchorMin = new Vector2(1f, 0f); cRt.anchorMax = new Vector2(1f, 0f);
-            cRt.pivot = new Vector2(1f, 0f);
-            cRt.sizeDelta = new Vector2(320f, 80f);
-            cRt.anchoredPosition = new Vector2(-40f, 40f);
+            cRt.anchorMin = new Vector2(0f, 0f); cRt.anchorMax = new Vector2(1f, 0f);
+            cRt.pivot = new Vector2(0.5f, 0f);
+            cRt.offsetMin = new Vector2(16f, 24f);
+            cRt.offsetMax = new Vector2(-32f, 96f);
             confirmGo.GetComponent<Image>().color = new Color(0.97f, 0.43f, 0.39f);
             var confirmText = MakeUiText(confirmGo.transform, "Label", "確認進入辦公室", 30, cjkFont);
             var ctRt = confirmText.rectTransform;
@@ -811,12 +815,28 @@ namespace CathayCrossing.HD2D.EditorTools
 
         // ─── UI helpers ─────────────────────────────────────────────────────
 
+        // Category tab: a square "Icon" RawImage (driven at runtime by
+        // PartThumbnailRenderer to show a rotating head / body model) centred
+        // in the button. The button's own Image acts as a frame that the
+        // controller tints with the accent colour when the tab is active.
+        // A hidden "Label" is kept as a fallback glyph for non-runtime views.
         static Button MakeIconButton(Transform parent, string goName, string label, TMP_FontAsset font)
         {
             var go = new GameObject(goName, typeof(RectTransform), typeof(Image), typeof(Button), typeof(LayoutElement));
             go.transform.SetParent(parent, false);
             go.GetComponent<Image>().color = new Color(0.18f, 0.18f, 0.22f, 1f);
             go.GetComponent<LayoutElement>().preferredWidth = 48f;
+
+            var iconGo = new GameObject("Icon", typeof(RectTransform), typeof(RawImage));
+            iconGo.transform.SetParent(go.transform, false);
+            var irt = (RectTransform)iconGo.transform;
+            irt.anchorMin = new Vector2(0.5f, 0.5f); irt.anchorMax = new Vector2(0.5f, 0.5f);
+            irt.pivot = new Vector2(0.5f, 0.5f);
+            irt.sizeDelta = new Vector2(48f, 48f);
+            irt.anchoredPosition = Vector2.zero;
+            iconGo.GetComponent<RawImage>().color = Color.white;
+
+            // Fallback glyph, hidden at runtime once the model icon is built.
             var lbl = MakeUiText(go.transform, "Label", label, 24, font);
             var lrt = lbl.rectTransform;
             lrt.anchorMin = Vector2.zero; lrt.anchorMax = Vector2.one;
@@ -834,6 +854,17 @@ namespace CathayCrossing.HD2D.EditorTools
             go.GetComponent<LayoutElement>().preferredHeight = 150f;
             go.GetComponent<LayoutElement>().preferredWidth = 150f;
 
+            // The model thumbnail fills the box (small inset so the button
+            // background shows as a selection frame). Driven at runtime by
+            // PartThumbnailRenderer.
+            var iconGo = new GameObject("Icon", typeof(RectTransform), typeof(RawImage));
+            iconGo.transform.SetParent(go.transform, false);
+            var irt = (RectTransform)iconGo.transform;
+            irt.anchorMin = Vector2.zero; irt.anchorMax = Vector2.one;
+            irt.offsetMin = new Vector2(6f, 6f); irt.offsetMax = new Vector2(-6f, -6f);
+            iconGo.GetComponent<RawImage>().color = Color.white;
+
+            // Hidden at runtime — kept only as a fallback for editor preview.
             var label = MakeUiText(go.transform, "Label", "Variant", 22, font);
             var lrt = label.rectTransform;
             lrt.anchorMin = new Vector2(0f, 0f); lrt.anchorMax = new Vector2(1f, 0f);

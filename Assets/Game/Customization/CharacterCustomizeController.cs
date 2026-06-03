@@ -116,6 +116,7 @@ namespace CathayCrossing.Customization
 
             // 3. Wire static UI.
             WireCategoryTabs();
+            SetupTabIcons();
             if (confirmButton != null)
             {
                 confirmButton.onClick.RemoveAllListeners();
@@ -150,6 +151,43 @@ namespace CathayCrossing.Customization
             }
         }
 
+        // Each tab is represented by a simple flat silhouette icon (a person
+        // for Head, a t-shirt for Body) — the rotating 3D model previews are
+        // used only inside the option boxes. The text "Label" child, if
+        // present, is hidden; the icon goes into the "Icon" RawImage child.
+        void SetupTabIcons()
+        {
+            if (categoryTabs == null) return;
+
+            foreach (var tab in categoryTabs)
+            {
+                if (tab.button == null) continue;
+
+                var label = tab.button.transform.Find("Label");
+                if (label != null) label.gameObject.SetActive(false);
+
+                var icon = tab.button.transform.Find("Icon")?.GetComponent<RawImage>();
+                if (icon == null) continue;
+
+                // Drop any leftover model-thumbnail renderer from earlier builds.
+                var thumb = icon.GetComponent<PartThumbnailRenderer>();
+                if (thumb != null) Destroy(thumb);
+
+                icon.texture = TabIconFor(tab.slot);
+                icon.color = new Color(0.95f, 0.95f, 0.95f, 1f);
+            }
+        }
+
+        static Texture2D TabIconFor(CharacterPartSlot slot)
+        {
+            switch (slot)
+            {
+                case CharacterPartSlot.Body: return TabIconFactory.Shirt();
+                case CharacterPartSlot.Head: return TabIconFactory.Head();
+                default: return TabIconFactory.Head();
+            }
+        }
+
         void SetActiveTab(CharacterPartSlot slot)
         {
             _activeTab = slot;
@@ -172,8 +210,10 @@ namespace CathayCrossing.Customization
                     var img = tab.button.GetComponent<Image>();
                     if (img != null)
                     {
+                        // The icon RawImage is inset, so the button background
+                        // reads as a frame: accent when active, dark otherwise.
                         img.color = isActive
-                            ? new Color(accentColor.r * 0.4f, accentColor.g * 0.4f, accentColor.b * 0.4f, 1f)
+                            ? accentColor
                             : new Color(0.18f, 0.18f, 0.22f, 1f);
                     }
                 }
@@ -186,10 +226,14 @@ namespace CathayCrossing.Customization
 
         void RepopulateOptions(CharacterPartSlot slot)
         {
-            // Clear previous buttons (skip the template itself).
+            // Clear previous buttons (skip the template itself). Deactivate
+            // immediately so the old options leave the layout this frame even
+            // though Destroy itself is deferred to end-of-frame.
             foreach (var btn in _slotOptionButtons)
             {
-                if (btn != null) Destroy(btn.gameObject);
+                if (btn == null) continue;
+                btn.gameObject.SetActive(false);
+                Destroy(btn.gameObject);
             }
             _slotOptionButtons.Clear();
 
@@ -201,27 +245,20 @@ namespace CathayCrossing.Customization
                 btn.gameObject.SetActive(true);
                 btn.name = "Option_" + slot + "_" + entry.sourceCharacterId;
 
-                // Label
-                var label = btn.transform.Find("Label")?.GetComponent<TMP_Text>();
-                if (label == null) label = btn.GetComponentInChildren<TMP_Text>(includeInactive: true);
-                if (label != null)
-                {
-                    label.text = entry.displayName;
-                    if (cjkFont != null) label.font = cjkFont;
-                }
+                // Options are shown as a rotating 3D model of just this slot's
+                // part(s), filling the box — no text. Hide the legacy label /
+                // badge children and render the model into the "Icon" RawImage.
+                var label = btn.transform.Find("Label");
+                if (label != null) label.gameObject.SetActive(false);
+                var badge = btn.transform.Find("Badge");
+                if (badge != null) badge.gameObject.SetActive(false);
 
-                // Combined badge — visible only on entries whose body+pants
-                // are baked into one mesh, so the user knows picking it
-                // locks the other slot too.
-                var badge = btn.transform.Find("Badge")?.GetComponent<TMP_Text>();
-                if (badge != null)
+                var icon = btn.transform.Find("Icon")?.GetComponent<RawImage>();
+                if (icon != null && _bodyByCharacterId.TryGetValue(entry.sourceCharacterId, out var body))
                 {
-                    badge.gameObject.SetActive(entry.combinesBodyAndPants);
-                    if (entry.combinesBodyAndPants)
-                    {
-                        badge.text = "整套";
-                        if (cjkFont != null) badge.font = cjkFont;
-                    }
+                    var thumb = icon.GetComponent<PartThumbnailRenderer>();
+                    if (thumb == null) thumb = icon.gameObject.AddComponent<PartThumbnailRenderer>();
+                    thumb.Build(body, entry.partNames);
                 }
 
                 CharacterPartCatalog.Entry captured = entry;
@@ -241,6 +278,16 @@ namespace CathayCrossing.Customization
             {
                 if (btn == null) continue;
                 bool isActive = btn.name.EndsWith("_" + currentForActiveSlot);
+
+                // The model thumbnail (RawImage) is inset, so the button
+                // background shows as a frame: accent when picked, dark
+                // otherwise.
+                var img = btn.GetComponent<Image>();
+                if (img != null)
+                {
+                    img.color = isActive ? accentColor : new Color(0.18f, 0.18f, 0.22f, 1f);
+                }
+
                 var outline = btn.GetComponent<Outline>();
                 if (outline == null && isActive) outline = btn.gameObject.AddComponent<Outline>();
                 if (outline != null)
