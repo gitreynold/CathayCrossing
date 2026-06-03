@@ -37,6 +37,15 @@ namespace CathayCrossing.HD2D
         [Tooltip("Key that fires the 'Dance' trigger on the Animator.")]
         public Key danceKey = Key.F;
 
+        [Header("Sit / Typing")]
+        [Tooltip("Toggle key: from standing → sit down (and stay seated); " +
+                 "while seated → stand back up. All other movement/action keys " +
+                 "are locked out while seated, except the typing key.")]
+        public Key sitKey = Key.G;
+        [Tooltip("While seated, starts the continuous typing loop. Has no " +
+                 "effect when standing.")]
+        public Key typeKey = Key.T;
+
         [Header("Collision")]
         public float colliderHeight = 1.6f;
         public float colliderRadius = 0.35f;
@@ -63,11 +72,26 @@ namespace CathayCrossing.HD2D
         static readonly int WaveHash       = Animator.StringToHash("Wave");
         static readonly int DanceHash      = Animator.StringToHash("Dance");
         static readonly int IsRunningHash  = Animator.StringToHash("IsRunning");
+        static readonly int SitHash        = Animator.StringToHash("Sit");
+        static readonly int TypingHash     = Animator.StringToHash("Typing");
         // Layer 0 state hashes for the action clips. Compared against
         // Animator.GetCurrentAnimatorStateInfo / GetNextAnimatorStateInfo so
         // we can suppress movement while the character is mid-performance.
         static readonly int WavingStateHash = Animator.StringToHash("Waving");
         static readonly int DanceStateHash  = Animator.StringToHash("Dance");
+        // Seated states — used to keep movement/actions locked through the
+        // whole sit-down / seated / typing / stand-up sequence.
+        static readonly int SitDownStateHash   = Animator.StringToHash("SitDown");
+        static readonly int SitTypingStateHash = Animator.StringToHash("SitTyping");
+        static readonly int SitStandStateHash  = Animator.StringToHash("SitStand");
+
+        // Seated control state. _sitMode is true from the moment G is pressed
+        // to sit until G is pressed again to stand. _typing tracks the typing
+        // loop (only meaningful while seated). _seatedLocked is recomputed each
+        // frame and gates movement + the H/F action keys.
+        bool _sitMode;
+        bool _typing;
+        bool _seatedLocked;
 
         // Tracked separately so UpdateAnimator() can see what ReadInput() saw
         // this frame (Shift held + WASD/arrows pressed) — that's the trigger
@@ -113,7 +137,12 @@ namespace CathayCrossing.HD2D
 
             _runningInput = running && input.sqrMagnitude > 0.01f;
 
-            if (IsPerformingAction())
+            // G/T sit + typing handling. Recomputes _seatedLocked so movement
+            // and the H/F action keys stay disabled through the whole seated
+            // sequence (sit-down → seated → typing → stand-up).
+            HandleSeatedInput();
+
+            if (IsPerformingAction() || _seatedLocked)
             {
                 input         = Vector2.zero;
                 _runningInput = false;
@@ -216,6 +245,11 @@ namespace CathayCrossing.HD2D
             // (original behaviour); IsRunning escalates Walking → Running.
             animator.SetBool(IsRunningHash, _runningInput);
 
+            // Wave/Dance are locked out while seated (or transitioning in/out
+            // of the seat). Only G (stand up) and T (typing) work then — those
+            // are handled in HandleSeatedInput().
+            if (_seatedLocked) return;
+
             var kb = Keyboard.current;
             if (kb != null && kb[greetKey].wasPressedThisFrame)
             {
@@ -229,6 +263,79 @@ namespace CathayCrossing.HD2D
             }
         }
 
+        // G/T handling for the local player. Drives the Animator's Sit/Typing
+        // bools and keeps _seatedLocked in sync so the rest of Update() knows
+        // to suppress movement and the other action keys.
+        //
+        //   G (standing) → sit down, then hold the seated pose indefinitely.
+        //   T (seated)   → start the continuous typing loop.
+        //   G (seated/typing) → stand back up; control unlocks once the
+        //                       stand-up clip finishes (SitStand → Idle).
+        void HandleSeatedInput()
+        {
+            if (animator == null) { _seatedLocked = false; return; }
+
+            var kb = Keyboard.current;
+            bool inSeatedState = IsInSeatedState();
+
+            if (kb != null && kb[sitKey].wasPressedThisFrame)
+            {
+                if (!_sitMode)
+                {
+                    // Stand → sit. Ignore if we're still mid stand-up so a
+                    // stray G doesn't bounce the character back down.
+                    if (!inSeatedState)
+                    {
+                        _sitMode = true;
+                        _typing  = false;
+                        animator.SetBool(SitHash, true);
+                        animator.SetBool(TypingHash, false);
+                        CathayCrossing.Network.NetworkManager.Instance?.SendAction("SIT");
+                    }
+                }
+                else
+                {
+                    // Seated/typing → stand up.
+                    _sitMode = false;
+                    _typing  = false;
+                    animator.SetBool(SitHash, false);
+                    animator.SetBool(TypingHash, false);
+                    CathayCrossing.Network.NetworkManager.Instance?.SendAction("STAND");
+                }
+            }
+
+            // T only matters while seated — start the typing loop.
+            if (_sitMode && !_typing && kb != null && kb[typeKey].wasPressedThisFrame)
+            {
+                _typing = true;
+                animator.SetBool(TypingHash, true);
+                CathayCrossing.Network.NetworkManager.Instance?.SendAction("TYPE");
+            }
+
+            // Locked while we intend to be seated OR while any seated clip is
+            // still playing (covers the stand-up tail after G is released).
+            _seatedLocked = _sitMode || IsInSeatedState();
+        }
+
+        // True while the Animator is in (or transitioning into) any seated
+        // state: sit-down, seated typing, or stand-up.
+        bool IsInSeatedState()
+        {
+            if (animator == null) return false;
+            var cur = animator.GetCurrentAnimatorStateInfo(0);
+            if (cur.shortNameHash == SitDownStateHash
+                || cur.shortNameHash == SitTypingStateHash
+                || cur.shortNameHash == SitStandStateHash) return true;
+            if (animator.IsInTransition(0))
+            {
+                var nxt = animator.GetNextAnimatorStateInfo(0);
+                if (nxt.shortNameHash == SitDownStateHash
+                    || nxt.shortNameHash == SitTypingStateHash
+                    || nxt.shortNameHash == SitStandStateHash) return true;
+            }
+            return false;
+        }
+
         public void Wave()
         {
             // Public hook so UI buttons / NPC interactions can also trigger Wave
@@ -240,6 +347,30 @@ namespace CathayCrossing.HD2D
         {
             // Public hook so UI buttons / NPC interactions can also trigger Dance.
             if (animator != null) animator.SetTrigger(DanceHash);
+        }
+
+        // ─── Public seated hooks (used by NetworkManager for remote players
+        //     and by UI buttons). These only drive the Animator bools; the
+        //     movement lock only runs for the local player in Update().
+        public void Sit()
+        {
+            _sitMode = true;
+            _typing  = false;
+            if (animator != null) { animator.SetBool(SitHash, true); animator.SetBool(TypingHash, false); }
+        }
+
+        public void StartTyping()
+        {
+            if (!_sitMode) return;
+            _typing = true;
+            if (animator != null) animator.SetBool(TypingHash, true);
+        }
+
+        public void StandUp()
+        {
+            _sitMode = false;
+            _typing  = false;
+            if (animator != null) { animator.SetBool(SitHash, false); animator.SetBool(TypingHash, false); }
         }
 
         void UpdateWalkBob()

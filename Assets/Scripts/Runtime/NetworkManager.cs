@@ -130,6 +130,9 @@ namespace CathayCrossing.Network
                         if (!string.IsNullOrEmpty(data.action)) {
                             if (data.action == "WAVE") controller.Wave();
                             else if (data.action == "DANCE") controller.Dance();
+                            else if (data.action == "SIT") controller.Sit();
+                            else if (data.action == "TYPE") controller.StartTyping();
+                            else if (data.action == "STAND") controller.StandUp();
                         }
                     } else {
                         // 如果沒找到腳本，直接更新位置當作備案
