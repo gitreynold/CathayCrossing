@@ -53,6 +53,29 @@ namespace CathayCrossing.HD2D
                  "tag. The tag must exist in the Tag Manager.")]
         public string chairTag = "Chair";
 
+        [Tooltip("Turn speed (deg/sec) while aligning to the chair before sitting.")]
+        public float seatTurnSpeed = 540f;
+        [Tooltip("Stop distance from the chair center that counts as 'arrived'.")]
+        public float seatArriveDistance = 0.05f;
+        [Tooltip("Max angle (deg) from the chair facing that counts as aligned.")]
+        public float seatAlignAngle = 4f;
+        [Tooltip("Yaw offset (deg) added to the chair's facing when the player " +
+                 "sits. Use 180 if the character ends up facing the wrong way.")]
+        public float seatYawOffset = 180f;
+        [Tooltip("Stand position offset relative to the chair, in the chair's " +
+                 "local space (X = chair right, Z = chair forward). The player " +
+                 "walks to chair.position + this offset before sitting. " +
+                 "Leave (0,0,0) to stop at the chair center.")]
+        public Vector3 seatLocalOffset = new Vector3(0f, 0f, -0.2f);
+        [Tooltip("Tag of the object whose yaw the player aligns to when sitting " +
+                 "(e.g. the desk+chair set). Falls back to the chair's own yaw " +
+                 "if no tagged object is nearby. Empty = use the chair.")]
+        public string seatAlignTag = "Desk_Set";
+
+        bool _approaching;
+        Transform _approachChair;
+
+
 
         [Header("Collision")]
         public float colliderHeight = 1.6f;
@@ -140,6 +163,15 @@ namespace CathayCrossing.HD2D
 
         void UpdateLocalPlayer()
         {
+            // Walk-to-seat sequence in progress: drive it, skip normal input.
+            if (_approaching)
+            {
+                UpdateApproach();
+                UpdateAnimator();
+                UpdateWalkBob();
+                return;
+            }
+
             Vector2 input = ReadInput();
             bool running = Keyboard.current != null && Keyboard.current.leftShiftKey.isPressed;
 
@@ -185,7 +217,10 @@ namespace CathayCrossing.HD2D
 
             if (desired.sqrMagnitude > 0.01f) _facing = desired;
 
-            if (spriteRoot != null && _facing.sqrMagnitude > 0.001f)
+            // Skip steering toward _facing while seated/locked — the seated
+            // pose already aligned spriteRoot to the Desk_Set and this would
+            // pull it back toward the walk-in direction.
+            if (!_seatedLocked && spriteRoot != null && _facing.sqrMagnitude > 0.001f)
             {
                 Quaternion targetRot = Quaternion.LookRotation(_facing, Vector3.up);
                 spriteRoot.rotation = Quaternion.Slerp(spriteRoot.rotation, targetRot, rotationSpeed * Time.deltaTime);
@@ -279,7 +314,7 @@ namespace CathayCrossing.HD2D
         //   T (seated)   → start the continuous typing loop.
         //   G (seated/typing) → stand back up; control unlocks once the
         //                       stand-up clip finishes (SitStand → Idle).
-        void HandleSeatedInput()
+void HandleSeatedInput()
         {
             if (animator == null) { _seatedLocked = false; return; }
 
@@ -288,22 +323,40 @@ namespace CathayCrossing.HD2D
 
             if (kb != null && kb[sitKey].wasPressedThisFrame)
             {
-                if (!_sitMode)
+                if (!_sitMode && !_approaching)
                 {
-                    // Stand → sit. Ignore if we're still mid stand-up so a
-                    // stray G doesn't bounce the character back down.
-                    if (!inSeatedState && IsNearChair())
+                    if (!inSeatedState)
                     {
-                        _sitMode = true;
-                        _typing  = false;
-                        animator.SetBool(SitHash, true);
-                        animator.SetBool(TypingHash, false);
-                        CathayCrossing.Network.NetworkManager.Instance?.SendAction("SIT");
+                        var chair = FindNearestChair();
+                        if (chair != null)
+                        {
+                            _approaching   = true;
+                            _approachChair = chair;
+
+                            Vector3 worldOff = transform.position - chair.position;
+                            worldOff.y = 0f;
+                            float dbgYaw = chair.eulerAngles.y;
+                            if (!string.IsNullOrEmpty(seatAlignTag))
+                            {
+                                var dbgT = FindNearestWithTag(seatAlignTag, chair.position);
+                                if (dbgT != null) dbgYaw = dbgT.eulerAngles.y;
+                            }
+                            Vector3 localOff = Quaternion.Inverse(
+                                Quaternion.Euler(0f, dbgYaw, 0f)) * worldOff;
+                            Debug.Log($"[Sit] seatLocalOffset for '{chair.name}': " +
+                                      $"({localOff.x:F3}, 0, {localOff.z:F3})");
+                        }
                     }
                 }
-                else
+                else if (_sitMode)
                 {
-                    // Seated/typing → stand up.
+                    // Seated/typing -> stand up. Also drop the code screen.
+                    var deskSetOff = FindNearestWithTag(seatAlignTag, transform.position);
+                    if (deskSetOff != null)
+                    {
+                        Transform deskOff = deskSetOff.Find("Office_Desk_01");
+                        CodeGenScreen.Hide(deskOff != null ? deskOff : deskSetOff);
+                    }
                     _sitMode = false;
                     _typing  = false;
                     animator.SetBool(SitHash, false);
@@ -312,17 +365,33 @@ namespace CathayCrossing.HD2D
                 }
             }
 
-            // T only matters while seated — start the typing loop.
-            if (_sitMode && !_typing && kb != null && kb[typeKey].wasPressedThisFrame)
+            // T only works while seated AND with a Desk_Set object nearby.
+            // Starts the typing loop and toggles the code-generation screen on
+            // the desk's monitor.
+            if (_sitMode && kb != null && kb[typeKey].wasPressedThisFrame)
             {
-                _typing = true;
-                animator.SetBool(TypingHash, true);
-                CathayCrossing.Network.NetworkManager.Instance?.SendAction("TYPE");
+                var deskSet = FindNearestWithTag(seatAlignTag, transform.position);
+                bool nearDesk = deskSet != null;
+                if (nearDesk && sitRange > 0f)
+                {
+                    Vector3 d = deskSet.position - transform.position; d.y = 0f;
+                    nearDesk = d.sqrMagnitude <= sitRange * sitRange;
+                }
+                if (nearDesk)
+                {
+                    if (!_typing)
+                    {
+                        _typing = true;
+                        animator.SetBool(TypingHash, true);
+                        CathayCrossing.Network.NetworkManager.Instance?.SendAction("TYPE");
+                    }
+                    Transform desk = deskSet.Find("Office_Desk_01");
+                    if (desk == null) desk = deskSet;
+                    CodeGenScreen.Toggle(desk, spriteRoot != null ? spriteRoot : transform);
+                }
             }
 
-            // Locked while we intend to be seated OR while any seated clip is
-            // still playing (covers the stand-up tail after G is released).
-            _seatedLocked = _sitMode || IsInSeatedState();
+            _seatedLocked = _approaching || _sitMode || IsInSeatedState();
         }
 
         // True while the Animator is in (or transitioning into) any seated
@@ -352,24 +421,135 @@ namespace CathayCrossing.HD2D
         // player. Only evaluated on the G keypress that initiates sitting, so
         // the per-frame cost is zero. A non-positive sitRange disables the
         // gate (sit anywhere).
-        bool IsNearChair()
+        // Returns the closest GameObject tagged chairTag within sitRange on the
+        // XZ plane, or null if none. sitRange <= 0 means unlimited range. Only
+        // called on the G keypress that initiates sitting.
+        Transform FindNearestChair()
         {
-            if (sitRange <= 0f || string.IsNullOrEmpty(chairTag)) return true;
+            if (string.IsNullOrEmpty(chairTag)) return null;
 
             GameObject[] chairs;
             try { chairs = GameObject.FindGameObjectsWithTag(chairTag); }
-            catch (UnityException) { return true; } // tag not defined → don't block
+            catch (UnityException) { return null; } // tag not defined
 
-            float bestSqr = sitRange * sitRange;
+            float range = sitRange > 0f ? sitRange : float.MaxValue;
+            float bestSqr = range * range;
+            Transform best = null;
             Vector3 me = transform.position;
             for (int i = 0; i < chairs.Length; i++)
             {
-                // Compare on the XZ plane so chair height doesn't matter.
                 Vector3 d = chairs[i].transform.position - me; d.y = 0f;
-                if (d.sqrMagnitude <= bestSqr) return true;
+                float s = d.sqrMagnitude;
+                if (s <= bestSqr) { bestSqr = s; best = chairs[i].transform; }
             }
-            return false;
+            return best;
         }
+
+        // Nearest object carrying `tag` to `origin` on the XZ plane, or null.
+        Transform FindNearestWithTag(string tag, Vector3 origin)
+        {
+            GameObject[] hits;
+            try { hits = GameObject.FindGameObjectsWithTag(tag); }
+            catch (UnityException) { return null; }
+
+            float bestSqr = float.MaxValue;
+            Transform best = null;
+            for (int i = 0; i < hits.Length; i++)
+            {
+                Vector3 d = hits[i].transform.position - origin; d.y = 0f;
+                float s = d.sqrMagnitude;
+                if (s < bestSqr) { bestSqr = s; best = hits[i].transform; }
+            }
+            return best;
+        }
+
+
+        // Drives the walk-to-seat sequence kicked off by G near a chair:
+        //   1) turn in place to match the chair's facing,
+        //   2) walk to the chair's center (XZ),
+        //   3) snap to center and start the sit-down animation.
+        void UpdateApproach()
+        {
+            if (_approachChair == null) { _approaching = false; return; }
+
+            // Walk-to position still uses the chair's own yaw (seatLocalOffset
+            // was calibrated against it). Facing aligns to the nearest
+            // seatAlignTag object (e.g. the desk set) if one is found.
+            float chairYaw = _approachChair.eulerAngles.y;
+            float alignYaw = chairYaw;
+            if (!string.IsNullOrEmpty(seatAlignTag))
+            {
+                var alignT = FindNearestWithTag(seatAlignTag, _approachChair.position);
+                if (alignT != null) alignYaw = alignT.eulerAngles.y;
+            }
+            Quaternion chairRot = Quaternion.Euler(0f, alignYaw + seatYawOffset, 0f);
+
+            // Seat stand position = chair center + offset rotated into the
+            // chair's yaw frame (so X/Z are relative to how the chair faces).
+            // Seat position = chair center, offset in the Desk_Set's yaw frame
+            // (Z = Desk_Set forward), so seatLocalOffset.z pushes forward.
+            Vector3 seatPos = _approachChair.position
+                            + Quaternion.Euler(0f, alignYaw, 0f) * seatLocalOffset;
+
+            // Phase 1: rotate to the chair's orientation before moving.
+            if (spriteRoot != null)
+            {
+                float angle = Quaternion.Angle(spriteRoot.rotation, chairRot);
+                if (angle > seatAlignAngle)
+                {
+                    spriteRoot.rotation = Quaternion.RotateTowards(
+                        spriteRoot.rotation, chairRot, seatTurnSpeed * Time.deltaTime);
+                    _velocity = Vector3.zero; // idle pose while turning
+                    ApplyGravityOnly();
+                    return;
+                }
+                spriteRoot.rotation = chairRot;
+            }
+
+            // Phase 2: walk to the seat stand position on the XZ plane.
+            Vector3 me = transform.position;
+            Vector3 toTarget = seatPos - me; toTarget.y = 0f;
+            float dist = toTarget.magnitude;
+
+            if (dist > seatArriveDistance)
+            {
+                Vector3 dir = toTarget / Mathf.Max(dist, 1e-4f);
+                _velocity = dir * moveSpeed; // feeds the walk animation
+                if (_controller.isGrounded && _verticalVelocity < 0f) _verticalVelocity = -2f;
+                else _verticalVelocity += gravity * Time.deltaTime;
+                Vector3 motion = _velocity; motion.y = _verticalVelocity;
+                _controller.Move(motion * Time.deltaTime);
+                return;
+            }
+
+            // Phase 3: arrived — snap to the seat position, then start sitting.
+            _velocity = Vector3.zero;
+            Vector3 snapped = new Vector3(seatPos.x, me.y, seatPos.z);
+            _controller.enabled = false;
+            transform.position = snapped;
+            _controller.enabled = true;
+
+            // Lock facing to the aligned orientation so the seated rotation
+            // stays put (and standing up resumes from here).
+            spriteRoot.rotation = chairRot;
+            _facing = chairRot * Vector3.forward;
+
+            _approaching   = false;
+            _approachChair = null;
+            _sitMode       = true;
+            _typing        = false;
+            if (animator != null) { animator.SetBool(SitHash, true); animator.SetBool(TypingHash, false); }
+            CathayCrossing.Network.NetworkManager.Instance?.SendAction("SIT");
+        }
+
+        void ApplyGravityOnly()
+        {
+            if (_controller == null) return;
+            if (_controller.isGrounded && _verticalVelocity < 0f) _verticalVelocity = -2f;
+            else _verticalVelocity += gravity * Time.deltaTime;
+            _controller.Move(new Vector3(0f, _verticalVelocity, 0f) * Time.deltaTime);
+        }
+
 
 
 
