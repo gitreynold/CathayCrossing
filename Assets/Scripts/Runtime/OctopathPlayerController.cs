@@ -468,13 +468,10 @@ void HandleSeatedInput()
         //   1) turn in place to match the chair's facing,
         //   2) walk to the chair's center (XZ),
         //   3) snap to center and start the sit-down animation.
-        void UpdateApproach()
+void UpdateApproach()
         {
             if (_approachChair == null) { _approaching = false; return; }
 
-            // Walk-to position still uses the chair's own yaw (seatLocalOffset
-            // was calibrated against it). Facing aligns to the nearest
-            // seatAlignTag object (e.g. the desk set) if one is found.
             float chairYaw = _approachChair.eulerAngles.y;
             float alignYaw = chairYaw;
             if (!string.IsNullOrEmpty(seatAlignTag))
@@ -484,10 +481,6 @@ void HandleSeatedInput()
             }
             Quaternion chairRot = Quaternion.Euler(0f, alignYaw + seatYawOffset, 0f);
 
-            // Seat stand position = chair center + offset rotated into the
-            // chair's yaw frame (so X/Z are relative to how the chair faces).
-            // Seat position = chair center, offset in the Desk_Set's yaw frame
-            // (Z = Desk_Set forward), so seatLocalOffset.z pushes forward.
             Vector3 seatPos = _approachChair.position
                             + Quaternion.Euler(0f, alignYaw, 0f) * seatLocalOffset;
 
@@ -506,7 +499,11 @@ void HandleSeatedInput()
                 spriteRoot.rotation = chairRot;
             }
 
-            // Phase 2: walk to the seat stand position on the XZ plane.
+            // Phase 2: walk to the seat stand position on the XZ plane. The
+            // desk now has a solid collider, so a CharacterController.Move
+            // would get blocked before reaching the seat. This approach is a
+            // fully scripted move to a known point, so we drive the transform
+            // directly (controller disabled) to slide past the desk collider.
             Vector3 me = transform.position;
             Vector3 toTarget = seatPos - me; toTarget.y = 0f;
             float dist = toTarget.magnitude;
@@ -515,10 +512,11 @@ void HandleSeatedInput()
             {
                 Vector3 dir = toTarget / Mathf.Max(dist, 1e-4f);
                 _velocity = dir * moveSpeed; // feeds the walk animation
-                if (_controller.isGrounded && _verticalVelocity < 0f) _verticalVelocity = -2f;
-                else _verticalVelocity += gravity * Time.deltaTime;
-                Vector3 motion = _velocity; motion.y = _verticalVelocity;
-                _controller.Move(motion * Time.deltaTime);
+                float step = Mathf.Min(moveSpeed * Time.deltaTime, dist);
+                Vector3 next = me + dir * step;
+                _controller.enabled = false;
+                transform.position = new Vector3(next.x, me.y, next.z);
+                _controller.enabled = true;
                 return;
             }
 
@@ -529,8 +527,6 @@ void HandleSeatedInput()
             transform.position = snapped;
             _controller.enabled = true;
 
-            // Lock facing to the aligned orientation so the seated rotation
-            // stays put (and standing up resumes from here).
             spriteRoot.rotation = chairRot;
             _facing = chairRot * Vector3.forward;
 
