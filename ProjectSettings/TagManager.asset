@@ -9,6 +9,7 @@ TagManager:
   - Floor
   - Wall
   - Desk_Set
+  - Door
   layers:
   - Default
   - TransparentFX

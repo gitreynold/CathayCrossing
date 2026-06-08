@@ -41,8 +41,9 @@ namespace CathayCrossing.HD2D
         float _swingSign = 1f;  // +1 opens toward -Z, -1 toward +Z (set from player side)
         float _closeTimer;      // counts down once fully open, then auto-closes
         float _centerX;
+        Collider[] _cols;       // leaf colliders, dropped while the door is open
 
-        void Start()
+void Start()
         {
             if (leafA == null || leafB == null) AutoFindLeaves();
             _leaves = new[] { leafA, leafB };
@@ -50,17 +51,21 @@ namespace CathayCrossing.HD2D
             _leafSign = new float[2];
             _curAngle = new float[2];
 
-            // Door centre on X (leaves straddle it). Used to decide each
-            // leaf's opening sign so the free edges swing apart together.
             _centerX = transform.position.x;
             for (int i = 0; i < 2; i++)
             {
                 _pivot[i] = _leaves[i].position;
-                // Leaf hinged on the −X jamb opens with +angle toward −Z; the
-                // +X jamb leaf needs the opposite sign to part symmetrically.
                 _leafSign[i] = (_pivot[i].x < _centerX) ? +1f : -1f;
                 _curAngle[i] = 0f;
             }
+
+            // Cache leaf colliders so we can drop them while the door is open
+            // (a swept static collider doesn't reliably clear the player's
+            // CharacterController, which left the player stuck in the doorway).
+            var cols = new System.Collections.Generic.List<Collider>();
+            foreach (var leaf in _leaves)
+                if (leaf != null) cols.AddRange(leaf.GetComponentsInChildren<Collider>());
+            _cols = cols.ToArray();
         }
 
         void AutoFindLeaves()
@@ -87,7 +92,6 @@ void Update()
                     d.y = 0f;
                     if (d.sqrMagnitude <= range * range)
                     {
-                        // Open AWAY from the player (push direction).
                         _swingSign = (player.transform.position.z > transform.position.z) ? +1f : -1f;
                         _open = true;
                         _closeTimer = autoCloseDelay;
@@ -95,20 +99,20 @@ void Update()
                 }
             }
 
-            // Once fully open, count down and auto-close.
+            // Stay open while the player is nearby; only auto-close after
+            // they leave, so the door never closes on someone mid-passage.
             if (_open)
             {
-                bool fullyOpen = true;
-                for (int i = 0; i < _leaves.Length; i++)
+                var pl = GameObject.FindWithTag(playerTag);
+                bool near = false;
+                if (pl != null)
                 {
-                    float g = _leafSign[i] * _swingSign * openAngle;
-                    if (!Mathf.Approximately(_curAngle[i], g)) { fullyOpen = false; break; }
+                    Vector3 dd = pl.transform.position - transform.position; dd.y = 0f;
+                    near = dd.sqrMagnitude <= (range + 1.5f) * (range + 1.5f);
                 }
-                if (fullyOpen)
-                {
-                    _closeTimer -= Time.deltaTime;
-                    if (_closeTimer <= 0f) _open = false;
-                }
+                if (near) _closeTimer = autoCloseDelay;
+                else _closeTimer -= Time.deltaTime;
+                if (_closeTimer <= 0f) _open = false;
             }
 
             // Animate each leaf toward its target angle by rotating about the
@@ -122,6 +126,16 @@ void Update()
                 _leaves[i].RotateAround(_pivot[i], Vector3.up, delta);
                 _curAngle[i] = next;
             }
+
+            // Block only when fully closed; drop the leaf colliders while the
+            // door is open so the player can walk through.
+            bool blocking = !_open;
+            if (blocking)
+                for (int i = 0; i < _curAngle.Length; i++)
+                    if (!Mathf.Approximately(_curAngle[i], 0f)) { blocking = false; break; }
+            if (_cols != null)
+                foreach (var c in _cols)
+                    if (c != null && c.enabled != blocking) c.enabled = blocking;
         }
 
         // Public hooks (UI / network).

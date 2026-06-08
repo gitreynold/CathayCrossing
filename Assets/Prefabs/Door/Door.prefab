@@ -28,7 +28,7 @@ Transform:
   m_GameObject: {fileID: 2445556662440226752}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -0.474, y: 0, z: 0}
+  m_LocalPosition: {x: -0.626, y: 0, z: 0}
   m_LocalScale: {x: 0.1, y: 1.8, z: 0.08}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -141,7 +141,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: -0.008}
-  m_LocalScale: {x: 0.85, y: 1.75, z: 0.01}
+  m_LocalScale: {x: 1.15, y: 1.75, z: 0.01}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 8443903812274068308}
@@ -233,6 +233,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 8443903812274068308}
+  - component: {fileID: 1364235632330929592}
   m_Layer: 0
   m_Name: Door
   m_TagString: Untagged
@@ -260,6 +261,32 @@ Transform:
   - {fileID: 3069755761282412752}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1364235632330929592
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3882207869677827926}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 204ac638fd945404c8066da10720fd44, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: CathayCrossing.HD2D.Runtime::CathayCrossing.HD2D.DoorOpener
+  movingParts:
+  - {fileID: 5116342410568214239}
+  - {fileID: 3069755761282412752}
+  doorPanel: {fileID: 5116342410568214239}
+  hingeLocalSide: 1
+  openKey: 29
+  openAngle: 95
+  openSpeed: 220
+  range: 3.5
+  autoCloseDelay: 2
+  playerTag: Player
+  autoAlign: 0
+  maxAlignShift: 1.6
+  minOpeningWidth: 0.55
 --- !u!1 &6837884857050079578
 GameObject:
   m_ObjectHideFlags: 0
@@ -289,7 +316,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0.93, z: 0}
-  m_LocalScale: {x: 1.05, y: 0.1, z: 0.08}
+  m_LocalScale: {x: 1.4, y: 0.1, z: 0.08}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 8443903812274068308}
@@ -400,7 +427,7 @@ Transform:
   m_GameObject: {fileID: 7736344092359376687}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.473, y: 0, z: 0}
+  m_LocalPosition: {x: 0.625, y: 0, z: 0}
   m_LocalScale: {x: 0.1, y: 1.8, z: 0.08}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -512,7 +539,7 @@ Transform:
   m_GameObject: {fileID: 8563376553141793208}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -0.257, y: -0.099, z: -0.01}
+  m_LocalPosition: {x: -0.348, y: -0.099, z: -0.01}
   m_LocalScale: {x: 0.18, y: 0.06, z: 0.1}
   m_ConstrainProportionsScale: 0
   m_Children: []
