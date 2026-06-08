@@ -108,7 +108,7 @@ namespace CathayCrossing.Bootstrap
 
             var cc = player.AddComponent<CharacterController>();
             cc.height = 1.72f;
-            cc.radius = 0.15f;
+            cc.radius = 0.11f;
             cc.center = new Vector3(0f, 0.86f, 0f);
             cc.skinWidth = 0.04f;
             cc.minMoveDistance = 0f;
