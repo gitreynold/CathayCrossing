@@ -24,7 +24,7 @@ namespace CathayCrossing.Bootstrap
     {
         [Header("Summon run")]
         [Tooltip("Lap radius around the player. Kept tight so the ring stays on open floor next to them.")]
-        public float circleRadius = 1.6f;
+        public float circleRadius = 1.2f;
         public float runSpeed = 3.6f;
         public float turnSpeed = 12f;
 
@@ -32,6 +32,9 @@ namespace CathayCrossing.Bootstrap
         [Tooltip("How far in front of the player the horse parks itself.")]
         public float stopDistanceInFront = 1.6f;
         public float arriveThreshold = 0.2f;
+        [Tooltip("Normalized time of the gallop clip to freeze on when parked — " +
+                 "chosen so all four hooves are planted on the ground.")]
+        [Range(0f, 1f)] public float idleFreezePoint = 0.75f;
 
         [Header("Visual")]
         public Transform visual;
@@ -89,11 +92,15 @@ namespace CathayCrossing.Bootstrap
                 if (_state == State.Wander)
                 {
                     _player = FindPlayer();
-                    if (_player != null) Begin(State.ToCircle);
+                    if (_player != null)
+                    {
+                        TriggerPlayerWhistle();   // summoning → player whistles
+                        Begin(State.ToCircle);
+                    }
                 }
                 else
                 {
-                    ResumeWander();   // from Idle (or mid-sequence) back to roaming
+                    ResumeWander();   // releasing — no whistle, just roam again
                 }
             }
 
@@ -160,13 +167,15 @@ namespace CathayCrossing.Bootstrap
                 case State.ToFront:
                 {
                     if (_player == null) { ResumeWander(); break; }
-                    Vector3 fwd = Flat(_player.forward);
+                    // Use the player's VISUAL facing (OctopathPlayerController
+                    // rotates a sprite-root child, not the root transform).
+                    Vector3 fwd = Flat(PlayerFacing());
                     if (fwd.sqrMagnitude < 0.01f) fwd = Flat(transform.position - _player.position).normalized;
                     Vector3 spot = _player.position + fwd.normalized * stopDistanceInFront;
                     if (MoveTowards(spot, dt) || _stateTime > circleTimeout)
                     {
                         Begin(State.Idle);
-                        if (_animator != null) _animator.speed = 0f;   // freeze: stand still
+                        FreezeAllHoovesDown();
                     }
                     break;
                 }
@@ -257,6 +266,36 @@ namespace CathayCrossing.Bootstrap
             if (Physics.Raycast(p + Vector3.up * 2f, Vector3.down, out RaycastHit hit, 10f) &&
                 hit.collider.name.StartsWith("Floor_Tile"))
                 transform.position = new Vector3(p.x, hit.point.y, p.z);
+        }
+
+        /// The player's actual look direction. OctopathPlayerController turns a
+        /// visual child (sprite root / model), so read the Animator's transform
+        /// rather than the root, which never rotates.
+        Vector3 PlayerFacing()
+        {
+            if (_player == null) return Vector3.forward;
+            var anim = _player.GetComponentInChildren<Animator>();
+            return anim != null ? anim.transform.forward : _player.forward;
+        }
+
+        /// Freeze the gallop clip on the frame where all four hooves touch the
+        /// floor, so the parked horse stands naturally instead of mid-leap.
+        void FreezeAllHoovesDown()
+        {
+            if (_animator == null) return;
+            _animator.Play(0, 0, idleFreezePoint);   // jump default state to the grounded frame
+            _animator.Update(0f);                     // evaluate the pose now
+            _animator.speed = 0f;                     // and hold it
+        }
+
+        /// Plays the shared "Whistle" one-shot on the player (added to every
+        /// PlayerAnimator controller). Only fired when SUMMONING the horse.
+        void TriggerPlayerWhistle()
+        {
+            if (_player == null) return;
+            var anim = _player.GetComponentInChildren<Animator>();
+            if (anim != null && anim.runtimeAnimatorController != null)
+                anim.SetTrigger("Whistle");
         }
 
         static Transform FindPlayer()
