@@ -80,3 +80,16 @@ crashlytics-build.properties
 # Claude Cowork generated files
 *.skill
 ziZBBuJu
+
+# macOS Finder metadata
+**/.DS_Store
+
+# Unity WebGL build 輸出 (GitHub Pages)
+/docs/
+
+# Unity 自動回復暫存
+/[Aa]ssets/_Recovery/
+/[Aa]ssets/_Recovery.meta
+
+# Burst 除錯資訊 (DoNotShip)
+*_BurstDebugInformation_DoNotShip/
