@@ -12,10 +12,11 @@ namespace CathayCrossing.Customization
     public static class TabIconFactory
     {
         const int S = 128;
-        static Texture2D _head, _shirt;
+        static Texture2D _head, _shirt, _crown;
 
         public static Texture2D Head()  { if (_head  == null) _head  = BuildHead();  return _head; }
         public static Texture2D Shirt() { if (_shirt == null) _shirt = BuildShirt(); return _shirt; }
+        public static Texture2D Crown() { if (_crown == null) _crown = BuildCrown(); return _crown; }
 
         static Texture2D NewTex()
         {
@@ -100,6 +101,58 @@ namespace CathayCrossing.Customization
                     if (fy >= 0.66f && fx >= 0.43f && fx <= 0.57f) on = false;                // neckline notch
                     if (on) t.SetPixel(x, y, c);
                 }
+            t.Apply();
+            return t;
+        }
+
+        // Crown silhouette: a base band with five triangular spikes rising from
+        // it (taller centre spike), used for the hidden "chairman" character
+        // tab. Reads clearly at small sizes and is unmistakably distinct from
+        // the head / shirt silhouettes.
+        static Texture2D BuildCrown()
+        {
+            var t = NewTex();
+            var c = Color.white;
+
+            // Base band of the crown.
+            float bandBottom = 0.30f, bandTop = 0.46f;
+            float left = 0.18f, right = 0.82f;
+            Rect(t, left, bandBottom, right, bandTop, c);
+
+            // Five spikes rising to peaks; centre peak is tallest. Peak x and
+            // height (top y) for each spike.
+            float[] peakX = { 0.18f, 0.34f, 0.50f, 0.66f, 0.82f };
+            float[] peakY = { 0.66f, 0.74f, 0.82f, 0.74f, 0.66f };
+            float baseY = bandTop;
+
+            // Fill the triangular region between adjacent spike valleys.
+            // For each column, the crown's upper outline is the max over all
+            // spikes of a tent function peaking at peakX,peakY and dropping to
+            // baseY at the neighbouring spikes.
+            float halfWidth = 0.16f; // spike half-base width
+            for (int x = 0; x < S; x++)
+            {
+                float fx = (x + 0.5f) / S;
+                if (fx < left || fx > right) continue;
+                float topY = baseY;
+                for (int s = 0; s < peakX.Length; s++)
+                {
+                    float d = Mathf.Abs(fx - peakX[s]);
+                    if (d > halfWidth) continue;
+                    float h = baseY + (peakY[s] - baseY) * (1f - d / halfWidth);
+                    if (h > topY) topY = h;
+                }
+                int y0 = Mathf.Max(0, Mathf.FloorToInt(baseY * S));
+                int y1 = Mathf.Min(S - 1, Mathf.CeilToInt(topY * S));
+                for (int y = y0; y <= y1; y++) t.SetPixel(x, y, c);
+            }
+
+            // Gem dots on the band.
+            var hole = new Color(0f, 0f, 0f, 0f);
+            Ellipse(t, 0.34f, 0.38f, 0.025f, 0.04f, hole);
+            Ellipse(t, 0.50f, 0.38f, 0.025f, 0.04f, hole);
+            Ellipse(t, 0.66f, 0.38f, 0.025f, 0.04f, hole);
+
             t.Apply();
             return t;
         }

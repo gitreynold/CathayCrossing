@@ -54,6 +54,9 @@ namespace CathayCrossing.HD2D.EditorTools
         const string RunClipFile    = "Running.fbx";
         const string WaveClipFile   = "Waving.fbx";
         const string DanceClipFile  = "Dance.fbx";
+        // Whistle one-shot — fired on the player by AfaRideHorseSummon when the
+        // player presses R to summon the horse.
+        const string WhistleClipFile = "Whistle.fbx";
         // Seated set (added 2026-06): Stand→Sit transition, seated typing loop,
         // and Sit→Stand transition. Stand_To_Sit / Sit_To_Stand are one-shot;
         // Sit_Typing loops. Stand_To_Sit holds its last frame as the seated
@@ -74,6 +77,7 @@ namespace CathayCrossing.HD2D.EditorTools
         const string IsRunningParam = "IsRunning";
         const string WaveParam      = "Wave";
         const string DanceParam     = "Dance";
+        const string WhistleParam   = "Whistle";
         // Seated bools driven by OctopathPlayerController. Sit gates the
         // Stand→Sit / Sit→Stand transitions; Typing toggles the seated
         // typing loop while Sit stays true.
@@ -107,6 +111,7 @@ namespace CathayCrossing.HD2D.EditorTools
             string runPath   = Path.Combine(SharedAnimDir, RunClipFile);
             string wavePath  = Path.Combine(SharedAnimDir, WaveClipFile);
             string dancePath = Path.Combine(SharedAnimDir, DanceClipFile);
+            string whistlePath = Path.Combine(SharedAnimDir, WhistleClipFile);
             string sitDownPath  = Path.Combine(SharedAnimDir, SitDownClipFile);
             string sitTypePath  = Path.Combine(SharedAnimDir, SitTypeClipFile);
             string sitStandPath = Path.Combine(SharedAnimDir, SitStandClipFile);
@@ -116,6 +121,7 @@ namespace CathayCrossing.HD2D.EditorTools
             ConfigureClipAsHumanoid(runPath,   isLoopable: true);
             ConfigureClipAsHumanoid(wavePath,  isLoopable: false);
             ConfigureClipAsHumanoid(dancePath, isLoopable: false);
+            ConfigureClipAsHumanoid(whistlePath, isLoopable: false);
             ConfigureClipAsHumanoid(sitDownPath,  isLoopable: false, bakeRootHeightY: true,  bakeRootPositionXZ: false);
             ConfigureClipAsHumanoid(sitTypePath,  isLoopable: true,  bakeRootHeightY: false, bakeRootPositionXZ: false);
             ConfigureClipAsHumanoid(sitStandPath, isLoopable: false, bakeRootHeightY: true,  bakeRootPositionXZ: false);
@@ -125,18 +131,20 @@ namespace CathayCrossing.HD2D.EditorTools
             var runClip   = LoadFirstAnimationClip(runPath);
             var waveClip  = LoadFirstAnimationClip(wavePath);
             var danceClip = LoadFirstAnimationClip(dancePath);
+            var whistleClip = LoadFirstAnimationClip(whistlePath);
             var sitDownClip  = LoadFirstAnimationClip(sitDownPath);
             var sitTypeClip  = LoadFirstAnimationClip(sitTypePath);
             var sitStandClip = LoadFirstAnimationClip(sitStandPath);
 
             if (idleClip == null || walkClip == null || runClip == null || waveClip == null || danceClip == null
+                || whistleClip == null
                 || sitDownClip == null || sitTypeClip == null || sitStandClip == null)
             {
                 Debug.LogError($"[CharacterAnimatorSetup] RebuildControllerOnly '{folderName}': a clip is missing in {SharedAnimDir}.");
                 return;
             }
 
-            BuildController(controllerPath, idleClip, walkClip, runClip, waveClip, danceClip,
+            BuildController(controllerPath, idleClip, walkClip, runClip, waveClip, danceClip, whistleClip,
                             sitDownClip, sitTypeClip, sitStandClip);
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
@@ -168,6 +176,7 @@ namespace CathayCrossing.HD2D.EditorTools
             string runPath   = Path.Combine(animDir, RunClipFile);
             string wavePath  = Path.Combine(animDir, WaveClipFile);
             string dancePath = Path.Combine(animDir, DanceClipFile);
+            string whistlePath = Path.Combine(animDir, WhistleClipFile);
 
             string sitDownPath  = Path.Combine(animDir, SitDownClipFile);
             string sitTypePath  = Path.Combine(animDir, SitTypeClipFile);
@@ -176,9 +185,10 @@ namespace CathayCrossing.HD2D.EditorTools
             ConfigureClipAsHumanoid(idlePath,  isLoopable: true);
             ConfigureClipAsHumanoid(walkPath,  isLoopable: true);
             ConfigureClipAsHumanoid(runPath,   isLoopable: true);
-            // Wave and Dance are one-shot — Animator exits to Idle via exit-time.
+            // Wave, Dance and Whistle are one-shot — Animator exits to Idle via exit-time.
             ConfigureClipAsHumanoid(wavePath,  isLoopable: false);
             ConfigureClipAsHumanoid(dancePath, isLoopable: false);
+            ConfigureClipAsHumanoid(whistlePath, isLoopable: false);
             // Stand→Sit and Sit→Stand are one-shot; the seated typing loops.
             // bakeRootHeightY: true  → body actually rises/lowers, feet grounded.
             // bakeRootPositionXZ: false → no horizontal drift (stay put on T / stand-up).
@@ -191,18 +201,20 @@ namespace CathayCrossing.HD2D.EditorTools
             var runClip   = LoadFirstAnimationClip(runPath);
             var waveClip  = LoadFirstAnimationClip(wavePath);
             var danceClip = LoadFirstAnimationClip(dancePath);
+            var whistleClip = LoadFirstAnimationClip(whistlePath);
             var sitDownClip  = LoadFirstAnimationClip(sitDownPath);
             var sitTypeClip  = LoadFirstAnimationClip(sitTypePath);
             var sitStandClip = LoadFirstAnimationClip(sitStandPath);
 
             if (idleClip == null || walkClip == null || runClip == null || waveClip == null || danceClip == null
+                || whistleClip == null
                 || sitDownClip == null || sitTypeClip == null || sitStandClip == null)
             {
                 Debug.LogError($"[CharacterAnimatorSetup] '{cfg.Name}' missing a clip in {animDir}.");
                 return;
             }
 
-            BuildController(controllerPath, idleClip, walkClip, runClip, waveClip, danceClip,
+            BuildController(controllerPath, idleClip, walkClip, runClip, waveClip, danceClip, whistleClip,
                             sitDownClip, sitTypeClip, sitStandClip);
 
             AssetDatabase.SaveAssets();
@@ -472,7 +484,7 @@ namespace CathayCrossing.HD2D.EditorTools
 
         // 5 states, 4 parameters — identical graph shape for every character.
         // See README block at the top of this file for the transition map.
-        static void BuildController(string controllerPath, AnimationClip idleClip, AnimationClip walkClip, AnimationClip runClip, AnimationClip waveClip, AnimationClip danceClip,
+        static void BuildController(string controllerPath, AnimationClip idleClip, AnimationClip walkClip, AnimationClip runClip, AnimationClip waveClip, AnimationClip danceClip, AnimationClip whistleClip,
                                     AnimationClip sitDownClip, AnimationClip sitTypeClip, AnimationClip sitStandClip)
         {
             if (File.Exists(controllerPath)) AssetDatabase.DeleteAsset(controllerPath);
@@ -482,6 +494,7 @@ namespace CathayCrossing.HD2D.EditorTools
             controller.AddParameter(IsRunningParam, AnimatorControllerParameterType.Bool);
             controller.AddParameter(WaveParam,      AnimatorControllerParameterType.Trigger);
             controller.AddParameter(DanceParam,     AnimatorControllerParameterType.Trigger);
+            controller.AddParameter(WhistleParam,   AnimatorControllerParameterType.Trigger);
             controller.AddParameter(SitParam,       AnimatorControllerParameterType.Bool);
             controller.AddParameter(TypingParam,    AnimatorControllerParameterType.Bool);
 
@@ -492,6 +505,7 @@ namespace CathayCrossing.HD2D.EditorTools
             var run   = sm.AddState("Running"); run.motion   = runClip;   run.writeDefaultValues   = true;
             var wave  = sm.AddState("Waving");  wave.motion  = waveClip;  wave.writeDefaultValues  = true;
             var dance = sm.AddState("Dance");   dance.motion = danceClip; dance.writeDefaultValues = true;
+            var whistle = sm.AddState("Whistle"); whistle.motion = whistleClip; whistle.writeDefaultValues = true;
             // Seated states. SitDown (Stand_To_Sit) is one-shot and holds its
             // last frame as the seated idle pose — no auto-exit, so the
             // character stays seated until G is pressed again. SitTyping loops.
@@ -568,6 +582,20 @@ namespace CathayCrossing.HD2D.EditorTools
             danceToIdle.hasExitTime = true;
             danceToIdle.exitTime    = 0.95f;
             danceToIdle.duration    = 0.25f;
+
+            // Any State → Whistle (R to summon the horse; trigger fired by
+            // AfaRideHorseSummon on the player Animator).
+            var anyToWhistle = sm.AddAnyStateTransition(whistle);
+            anyToWhistle.AddCondition(AnimatorConditionMode.If, 0f, WhistleParam);
+            anyToWhistle.duration            = kBlend;
+            anyToWhistle.hasExitTime         = false;
+            anyToWhistle.canTransitionToSelf = false;
+
+            // Whistle → Idle on completion
+            var whistleToIdle = whistle.AddTransition(idle);
+            whistleToIdle.hasExitTime = true;
+            whistleToIdle.exitTime    = 0.95f;
+            whistleToIdle.duration    = 0.20f;
 
             // ── Seated graph ────────────────────────────────────────────────
             // Enter sitting only from the grounded locomotion states so the

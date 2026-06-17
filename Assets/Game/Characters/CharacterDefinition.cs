@@ -48,5 +48,13 @@ namespace CathayCrossing.Characters
                  "= no correction. Positive X pitches the upper body " +
                  "forward (counter a backward lean).")]
         public Vector3 spineCorrectionEuler;
+
+        [Tooltip("When true, this character is a whole-body 'hidden' character " +
+                 "that is NOT part of the LEGO head/body part catalog. It is " +
+                 "shown under its own tab in the customise scene, selected as a " +
+                 "complete model (no head/body split), and spawned whole — its " +
+                 "own rig + the shared Humanoid AnimatorController. Selecting it " +
+                 "overrides the assembled head/body look.")]
+        public bool hiddenWholeBody;
     }
 }

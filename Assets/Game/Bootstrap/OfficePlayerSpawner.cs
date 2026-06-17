@@ -133,7 +133,13 @@ namespace CathayCrossing.Bootstrap
             // per-slot PlayerPrefs, build the assembled body. Otherwise
             // fall back to the single-variant legacy path.
             CharacterDefinition activeDef = null;
-            GameObject fbxVisual = InstantiateAssembledFromPrefs(body.transform, out activeDef);
+            // Whole-body "hidden" character (e.g. chairman) takes priority — it
+            // replaces the assembled head/body look entirely.
+            GameObject fbxVisual = InstantiateHiddenFromPrefs(body.transform, out activeDef);
+            if (fbxVisual == null)
+            {
+                fbxVisual = InstantiateAssembledFromPrefs(body.transform, out activeDef);
+            }
             if (fbxVisual == null)
             {
                 activeDef = ResolveActiveCharacter();
@@ -254,6 +260,26 @@ namespace CathayCrossing.Bootstrap
                                                        catalog.baseCharacterId);
             }
             return CharacterAssembler.Assemble(catalog, selection, bodyById, parent);
+        }
+
+        // Whole-body hidden character path. When the customise scene saved a
+        // Customize.HiddenCharacter id, spawn that complete model (its own rig)
+        // and return its CharacterDefinition so the caller wires its shared
+        // Humanoid controller. Returns null when no hidden character is picked.
+        static GameObject InstantiateHiddenFromPrefs(Transform parent, out CharacterDefinition hiddenDef)
+        {
+            hiddenDef = null;
+            string wanted = PlayerPrefs.GetString(CharacterCustomizeController.PlayerPrefsHiddenKey, "");
+            if (string.IsNullOrEmpty(wanted)) return null;
+
+            foreach (var def in Resources.LoadAll<CharacterDefinition>("Characters"))
+            {
+                if (def == null || !def.hiddenWholeBody) continue;
+                if (def.id != wanted || def.body == null) continue;
+                hiddenDef = def;
+                return InstantiateCharacterDefinition(def, parent);
+            }
+            return null;
         }
 
         static GameObject InstantiateCharacterDefinition(CharacterDefinition def, Transform parent)

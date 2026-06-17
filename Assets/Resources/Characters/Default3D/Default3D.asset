@@ -18,3 +18,4 @@ MonoBehaviour:
   rigSource: {fileID: 0}
   controller: {fileID: 9100000, guid: 004647b685cc640d8b4f8f81733a8dbf, type: 2}
   spineCorrectionEuler: {x: 0, y: 0, z: 0}
+  hiddenWholeBody: 0

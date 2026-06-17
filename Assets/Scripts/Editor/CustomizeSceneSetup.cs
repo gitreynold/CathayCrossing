@@ -73,6 +73,35 @@ namespace CathayCrossing.HD2D.EditorTools
             new PartialEntry { SourceFileName = "3d_men_jay_partial.fbx",    CharacterId = "JayPartial", DisplayName = "Jay 造型",   TargetFbxName = "3d_men_jay_partial", FallbackTint = new Color(0.86f, 0.50f, 0.42f), SpineCorrectionEuler = Vector3.zero },
         };
 
+        // ─── Hidden whole-body characters ──────────────────────────────────
+        //
+        // These are NOT part of the LEGO head/body part catalog. Each is a
+        // complete rigged model imported through the same Humanoid pipeline as
+        // the partials (so the shared animation set retargets onto it), given a
+        // CharacterDefinition flagged hiddenWholeBody, and surfaced under the
+        // crown tab in the customise scene. Source paths are absolute because
+        // these models live outside the shared partials folder.
+        struct HiddenEntry
+        {
+            public string SourceAbsolutePath;
+            public string CharacterId;
+            public string DisplayName;
+            public string TargetFbxName;
+            public Color FallbackTint;
+        }
+
+        static readonly HiddenEntry[] HiddenCharacters =
+        {
+            new HiddenEntry
+            {
+                SourceAbsolutePath = "/Users/twinb00598897/Desktop/董事長/Chairman.fbx",
+                CharacterId  = "Chairman",
+                DisplayName  = "董事長",
+                TargetFbxName = "Chairman",
+                FallbackTint = new Color(0.50f, 0.50f, 0.55f),
+            },
+        };
+
         // Right-rail category tabs. Single Chinese glyph keeps the bar
         // compact and matches the icon-like density of the reference mockup.
         //
@@ -233,8 +262,65 @@ namespace CathayCrossing.HD2D.EditorTools
             // customise controller can pick parts per slot.
             BuildPartCatalog();
 
+            // Whole-body hidden characters go through the same Humanoid import
+            // pipeline but are NOT added to the part catalog.
+            created += ImportHiddenCharacters();
+
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
+            return created;
+        }
+
+        // ─── Hidden character import ────────────────────────────────────────
+
+        static int ImportHiddenCharacters()
+        {
+            int created = 0;
+            foreach (var entry in HiddenCharacters)
+            {
+                if (!File.Exists(entry.SourceAbsolutePath))
+                {
+                    Debug.LogWarning($"[CustomizeSceneSetup] Hidden character source missing: {entry.SourceAbsolutePath}");
+                    continue;
+                }
+
+                string charDir = $"Assets/Resources/Characters/{entry.CharacterId}";
+                EnsureFolder(charDir);
+
+                string dstFbx = $"{charDir}/{entry.TargetFbxName}.fbx";
+                if (!File.Exists(dstFbx))
+                {
+                    File.Copy(entry.SourceAbsolutePath, dstFbx, overwrite: false);
+                    AssetDatabase.ImportAsset(dstFbx, ImportAssetOptions.ForceUpdate);
+                }
+
+                // Same per-character pipeline as the partials: Humanoid avatar,
+                // texture/material extraction (the chairman ships its own
+                // Tencent texture set, so the sanitiser below leaves them be),
+                // and a PlayerAnimator.controller built from the shared clips.
+                CharacterAnimatorSetup.SetupCharacterByName(entry.CharacterId, entry.TargetFbxName + ".fbx");
+                SanitizeMaterialsIfNoOwnTextures(charDir, entry.FallbackTint);
+
+                string defPath = $"{charDir}/{entry.CharacterId}.asset";
+                var def = AssetDatabase.LoadAssetAtPath<CharacterDefinition>(defPath);
+                if (def == null)
+                {
+                    def = ScriptableObject.CreateInstance<CharacterDefinition>();
+                    AssetDatabase.CreateAsset(def, defPath);
+                    created++;
+                }
+                def.id = entry.CharacterId;
+                def.displayName = entry.DisplayName;
+                def.body = AssetDatabase.LoadAssetAtPath<GameObject>(dstFbx);
+                def.controller = AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>(
+                    $"{charDir}/PlayerAnimator.controller");
+                def.rigSource = null;
+                def.spineCorrectionEuler = Vector3.zero;
+                def.hiddenWholeBody = true;   // whole-body, outside the LEGO catalog
+                EditorUtility.SetDirty(def);
+
+                Debug.Log($"[CustomizeSceneSetup] Imported hidden character '{entry.CharacterId}' ({entry.DisplayName}).");
+            }
             return created;
         }
 
@@ -755,6 +841,11 @@ namespace CathayCrossing.HD2D.EditorTools
                 });
             }
 
+            // Hidden whole-body characters tab (crown icon). The controller
+            // hides it automatically at runtime when no hiddenWholeBody
+            // CharacterDefinition exists, so it's safe to always create it.
+            var hiddenTabBtn = MakeIconButton(tabBar.transform, "Tab_Hidden", "★", cjkFont);
+
             // Variant grid.
             var gridGo = new GameObject("VariantGrid", typeof(RectTransform), typeof(GridLayoutGroup));
             gridGo.transform.SetParent(rail.transform, false);
@@ -802,6 +893,7 @@ namespace CathayCrossing.HD2D.EditorTools
             ctrl.variantGridContainer = gridGo.transform;
             ctrl.variantButtonTemplate = variantTemplate;
             ctrl.categoryTabs = categoryTabs.ToArray();
+            ctrl.hiddenTab = hiddenTabBtn;
             ctrl.confirmButton = confirmBtn;
             ctrl.selectedNameLabel = selectedLabel;
             ctrl.nextSceneName = "OfficeScene";
