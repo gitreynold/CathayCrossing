@@ -44,7 +44,7 @@ namespace CathayCrossing.HD2D
         public Key sitKey = Key.G;
         [Tooltip("While seated, starts the continuous typing loop. Has no " +
                  "effect when standing.")]
-        public Key typeKey = Key.T;
+        public Key typeKey = Key.O;
 
         [Tooltip("Only let the player sit when within this distance of a chair. " +
                  "Set <= 0 to disable the proximity gate.")]
@@ -178,7 +178,7 @@ namespace CathayCrossing.HD2D
 
             _runningInput = running && input.sqrMagnitude > 0.01f;
 
-            // G/T sit + typing handling. Recomputes _seatedLocked so movement
+            // G/O sit + typing handling. Recomputes _seatedLocked so movement
             // and the H/F action keys stay disabled through the whole seated
             // sequence (sit-down → seated → typing → stand-up).
             HandleSeatedInput();
@@ -290,7 +290,7 @@ namespace CathayCrossing.HD2D
             animator.SetBool(IsRunningHash, _runningInput);
 
             // Wave/Dance are locked out while seated (or transitioning in/out
-            // of the seat). Only G (stand up) and T (typing) work then — those
+            // of the seat). Only G (stand up) and O (typing) work then — those
             // are handled in HandleSeatedInput().
             if (_seatedLocked) return;
 
@@ -312,12 +312,21 @@ namespace CathayCrossing.HD2D
         // to suppress movement and the other action keys.
         //
         //   G (standing) → sit down, then hold the seated pose indefinitely.
-        //   T (seated)   → start the continuous typing loop.
+        //   O (seated)   → start the continuous typing loop.
         //   G (seated/typing) → stand back up; control unlocks once the
         //                       stand-up clip finishes (SitStand → Idle).
 void HandleSeatedInput()
         {
             if (animator == null) { _seatedLocked = false; return; }
+
+            // While the computer screen UI is open, swallow ALL action keys so
+            // typing into the embedded web page can't trigger sit/stand/etc.
+            // The UI itself is closed with ESC or its ✕ button.
+            if (ComputerScreenUI.IsOpen)
+            {
+                _seatedLocked = _approaching || _sitMode || IsInSeatedState();
+                return;
+            }
 
             var kb = Keyboard.current;
             bool inSeatedState = IsInSeatedState();
@@ -363,10 +372,11 @@ void HandleSeatedInput()
                     animator.SetBool(SitHash, false);
                     animator.SetBool(TypingHash, false);
                     CathayCrossing.Network.NetworkManager.Instance?.SendAction("STAND");
+                    ComputerScreenUI.Hide();
                 }
             }
 
-            // T only works while seated AND with a Desk_Set object nearby.
+            // O only works while seated AND with a Desk_Set object nearby.
             // Starts the typing loop and toggles the code-generation screen on
             // the desk's monitor.
             if (_sitMode && kb != null && kb[typeKey].wasPressedThisFrame)
@@ -385,7 +395,9 @@ void HandleSeatedInput()
                         _typing = true;
                         animator.SetBool(TypingHash, true);
                         CathayCrossing.Network.NetworkManager.Instance?.SendAction("TYPE");
+                        // (UI opening moved below — fires on every O press)
                     }
+                    ComputerScreenUI.Show(animator);
                     Transform desk = deskSet.Find("Office_Desk_01");
                     if (desk == null) desk = deskSet;
                     CodeGenScreen.Toggle(desk, spriteRoot != null ? spriteRoot : transform);

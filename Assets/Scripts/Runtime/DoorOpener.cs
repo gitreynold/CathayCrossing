@@ -33,7 +33,7 @@ namespace CathayCrossing.HD2D
         [Tooltip("Swing speed (degrees / second).")]
         public float openSpeed = 220f;
         [Tooltip("Player must be within this distance (m) of the door.")]
-        public float range = 3.5f;
+        public float range = 1.8f;
         [Tooltip("Seconds the door stays fully open before auto-closing.")]
         public float autoCloseDelay = 2f;
         public string playerTag = "Player";
