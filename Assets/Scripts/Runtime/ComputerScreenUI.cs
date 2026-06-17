@@ -2,34 +2,38 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem.UI;
+using Gree.UnityWebView;
 
 namespace CathayCrossing.HD2D
 {
-    // Animal Crossing-style "computer desktop" floating window.
+    // Animal Crossing-style "computer desktop" floating window with an EMBEDDED
+    // web page (gree/unity-webview).
     //
     // Flow (driven by OctopathPlayerController):
     //   O while seated  -> ComputerScreenUI.Show(animator) — desktop page with
-    //                      a single app icon, AC cream/pastel look.
-    //   click the icon  -> opens the Artemis login page in the SYSTEM BROWSER.
-    //                      (Embedding the site in-game is blocked cross-origin:
-    //                      403 on load + SecurityError on close, so we no longer
-    //                      use any webview here.)
-    //   typing stops    -> the UI watches the Animator's `Typing` bool every
-    //                      frame and closes itself.
+    //                      a single app icon.
+    //   click the icon  -> opens the browser page; a gree WebViewObject is
+    //                      overlaid on the WebArea panel and loads LoginUrl.
+    //   typing stops    -> watches the Animator's `Typing` bool and closes.
+    //
+    // On WebGL the webview is an HTML <iframe> drawn over the Unity canvas, so
+    // the embedded page must allow framing / be same-origin (set the LoginUrl to
+    // a page you control). SetMargins keeps the iframe aligned to the panel and
+    // follows the window's zoom.
     [DisallowMultipleComponent]
     public class ComputerScreenUI : MonoBehaviour
     {
-        const string LoginUrl = "https://artemis.cubeapps.work/login";
+        const string LoginUrl = "https://artemis.cubeapps.work";
 
         static ComputerScreenUI _inst;
         static readonly int TypingHash = Animator.StringToHash("Typing");
 
         // ── Animal Crossing palette ──────────────────────────────────────────
-        static readonly Color Cream      = new Color(1.000f, 0.965f, 0.882f); // bg
-        static readonly Color CreamDark  = new Color(0.949f, 0.898f, 0.769f); // bars
-        static readonly Color CreamLine  = new Color(0.886f, 0.820f, 0.667f); // outline
-        static readonly Color Brown      = new Color(0.475f, 0.404f, 0.302f); // text
-        static readonly Color LeafGreen  = new Color(0.471f, 0.745f, 0.392f); // accent
+        static readonly Color Cream      = new Color(1.000f, 0.965f, 0.882f);
+        static readonly Color CreamDark  = new Color(0.949f, 0.898f, 0.769f);
+        static readonly Color CreamLine  = new Color(0.886f, 0.820f, 0.667f);
+        static readonly Color Brown      = new Color(0.475f, 0.404f, 0.302f);
+        static readonly Color LeafGreen  = new Color(0.471f, 0.745f, 0.392f);
         static readonly Color LeafDark   = new Color(0.357f, 0.604f, 0.298f);
         static readonly Color White      = new Color(1f, 1f, 1f, 1f);
 
@@ -42,6 +46,11 @@ namespace CathayCrossing.HD2D
         float _zoom = 1f;
         const float ZoomMin = 0.6f, ZoomMax = 1.7f, ZoomStep = 0.12f;
         const float BaseW = 1300f, BaseH = 780f;
+
+        // ── Embedded web view (gree) ─────────────────────────────────────────
+        WebViewObject _webView;
+        RectTransform _webArea;
+        Text _loading;
 
         static Sprite _rounded;
         static Font _font;
@@ -68,25 +77,21 @@ namespace CathayCrossing.HD2D
 
         void Update()
         {
-            // Close as soon as the typing animation stops (stand up, etc.).
-            if (_watch == null || !_watch.GetBool(TypingHash))
-            {
-                Close();
-                return;
-            }
-            // ESC closes the UI (player action keys are locked while open).
+            if (_watch == null || !_watch.GetBool(TypingHash)) { Close(); return; }
+
             var kb = UnityEngine.InputSystem.Keyboard.current;
-            if (kb != null && kb.escapeKey.wasPressedThisFrame)
-            {
-                Close();
-                return;
-            }
+            if (kb != null && kb.escapeKey.wasPressedThisFrame) { Close(); return; }
+
+            // Keep the embedded page glued to the (possibly zoomed) panel.
+            if (_webView != null && _browserPage != null && _browserPage.activeSelf)
+                ApplyWebMargins();
         }
 
         void Close()
         {
             if (_closing) return;
             _closing = true;
+            if (_webView != null) _webView.SetVisibility(false);
             _inst = null;
             Destroy(gameObject);
         }
@@ -111,9 +116,7 @@ namespace CathayCrossing.HD2D
 
             EnsureEventSystem();
 
-            // Centered floating window, slightly transparent so the scene shows
-            // through behind it.
-            var win = Panel(transform, "Window", new Color(Cream.r, Cream.g, Cream.b, 0.85f),
+            var win = Panel(transform, "Window", new Color(Cream.r, Cream.g, Cream.b, 0.92f),
                             new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), rounded: true);
             var winRt = (RectTransform)win.transform;
             winRt.sizeDelta = new Vector2(BaseW, BaseH);
@@ -124,7 +127,6 @@ namespace CathayCrossing.HD2D
             _browserPage = BuildBrowserPage(win.transform);
             _browserPage.SetActive(false);
 
-            // ✕ close button, top-right of the window (also closable via ESC).
             var close = Panel(win.transform, "CloseBtn", new Color(0.894f, 0.475f, 0.416f, 0.95f),
                               Vector2.one, Vector2.one, rounded: true);
             var closeRt = (RectTransform)close.transform;
@@ -136,7 +138,6 @@ namespace CathayCrossing.HD2D
             closeBtn.targetGraphic = close.GetComponent<Image>();
             closeBtn.onClick.AddListener(Close);
 
-            // ＋ / − zoom buttons (left of the ✕) for live resize.
             var zoomOut = MakeZoomBtn(win.transform, "ZoomOutBtn", "−", -75f);
             zoomOut.onClick.AddListener(() => SetZoom(_zoom - ZoomStep));
             var zoomIn = MakeZoomBtn(win.transform, "ZoomInBtn", "＋", -116f);
@@ -148,7 +149,6 @@ namespace CathayCrossing.HD2D
             var page = Panel(parent, "DesktopPage", Color.clear, Vector2.zero, Vector2.one);
             var barColor = new Color(CreamDark.r, CreamDark.g, CreamDark.b, 0.9f);
 
-            // Soft decorative dots (AC ground-pattern feel).
             for (int i = 0; i < 6; i++)
             {
                 var dot = Panel(page.transform, "Dot" + i, new Color(CreamDark.r, CreamDark.g, CreamDark.b, 0.4f),
@@ -159,7 +159,6 @@ namespace CathayCrossing.HD2D
                 rt.sizeDelta = new Vector2(80f + (i % 2) * 45f, 80f + (i % 2) * 45f);
             }
 
-            // Top bar.
             var bar = Panel(page.transform, "TopBar", barColor, new Vector2(0f, 1f), Vector2.one, rounded: true);
             var barRt = (RectTransform)bar.transform;
             barRt.offsetMin = new Vector2(12f, -56f);
@@ -167,7 +166,6 @@ namespace CathayCrossing.HD2D
             Label(bar.transform, "Title", "Artemis OS", 24, Brown, TextAnchor.MiddleCenter, FontStyle.Bold)
                 .StretchFill();
 
-            // Bottom dock.
             var dock = Panel(page.transform, "Dock", barColor, Vector2.zero, new Vector2(1f, 0f), rounded: true);
             var dockRt = (RectTransform)dock.transform;
             dockRt.offsetMin = new Vector2(260f, 12f);
@@ -175,7 +173,6 @@ namespace CathayCrossing.HD2D
             Label(dock.transform, "Hint", "點選圖示開啟應用程式", 16, Brown, TextAnchor.MiddleCenter)
                 .StretchFill();
 
-            // ── The single app icon ─────────────────────────────────────────
             var icon = Panel(page.transform, "ArtemisIcon", LeafGreen, Vector2.zero, Vector2.zero, rounded: true);
             var iconRt = (RectTransform)icon.transform;
             iconRt.anchorMin = iconRt.anchorMax = new Vector2(0f, 1f);
@@ -221,13 +218,11 @@ namespace CathayCrossing.HD2D
             var page = Panel(parent, "BrowserPage", Color.clear, Vector2.zero, Vector2.one);
             var barColor = new Color(CreamDark.r, CreamDark.g, CreamDark.b, 0.9f);
 
-            // Top bar with back button + title.
             var bar = Panel(page.transform, "TopBar", barColor, new Vector2(0f, 1f), Vector2.one, rounded: true);
             var barRt = (RectTransform)bar.transform;
             barRt.offsetMin = new Vector2(12f, -56f);
             barRt.offsetMax = new Vector2(-12f, -10f);
-
-            Label(bar.transform, "Title", "Artemis — 登入", 20, Brown, TextAnchor.MiddleCenter, FontStyle.Bold)
+            Label(bar.transform, "Title", "Artemis — Pulse", 20, Brown, TextAnchor.MiddleCenter, FontStyle.Bold)
                 .StretchFill();
 
             var back = Panel(bar.transform, "BackBtn", LeafGreen, Vector2.zero, Vector2.zero, rounded: true);
@@ -242,53 +237,78 @@ namespace CathayCrossing.HD2D
             backBtn.targetGraphic = back.GetComponent<Image>();
             backBtn.onClick.AddListener(ShowDesktop);
 
-            // Content frame with an instruction + "open in browser" button.
+            // Always-available fallback (in the bar, NOT under the iframe).
+            var ext = Panel(bar.transform, "OpenExtBtn", LeafDark, Vector2.one, Vector2.one, rounded: true);
+            var extRt = (RectTransform)ext.transform;
+            extRt.anchorMin = new Vector2(0f, 0.5f); extRt.anchorMax = new Vector2(0f, 0.5f);
+            extRt.anchoredPosition = new Vector2(196f, 0f); extRt.sizeDelta = new Vector2(146f, 34f);
+            Label(ext.transform, "Txt", "用瀏覽器開啟", 15, White, TextAnchor.MiddleCenter, FontStyle.Bold).StretchFill();
+            var extBtn = ext.AddComponent<Button>(); extBtn.targetGraphic = ext.GetComponent<Image>();
+            extBtn.onClick.AddListener(() => Application.OpenURL(LoginUrl));
+
             var frame = Panel(page.transform, "WebFrame", new Color(CreamLine.r, CreamLine.g, CreamLine.b, 0.9f),
                               Vector2.zero, Vector2.one, rounded: true);
             var frameRt = (RectTransform)frame.transform;
             frameRt.offsetMin = new Vector2(12f, 12f);
             frameRt.offsetMax = new Vector2(-12f, -64f);
 
-            var inner = Panel(frame.transform, "Area", new Color(1f, 1f, 1f, 0.9f), Vector2.zero, Vector2.one, rounded: true);
+            // WebArea: the rect the embedded web page (iframe) is overlaid onto.
+            var inner = Panel(frame.transform, "WebArea", new Color(1f, 1f, 1f, 0.95f), Vector2.zero, Vector2.one, rounded: true);
             var innerRt = (RectTransform)inner.transform;
             innerRt.offsetMin = new Vector2(5f, 5f);
             innerRt.offsetMax = new Vector2(-5f, -5f);
+            _webArea = innerRt;
 
-            Label(inner.transform, "Info", "登入頁已在瀏覽器分頁開啟。\n若沒有自動跳出，請按下方按鈕。", 18, Brown, TextAnchor.MiddleCenter)
-                .StretchFill();
-
-            var openBtn = Panel(inner.transform, "OpenLoginBtn", LeafGreen,
-                                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), rounded: true);
-            var obRt = (RectTransform)openBtn.transform;
-            obRt.sizeDelta = new Vector2(220f, 52f);
-            obRt.anchoredPosition = new Vector2(0f, -70f);
-            Label(openBtn.transform, "T", "開啟登入頁", 20, White, TextAnchor.MiddleCenter, FontStyle.Bold).StretchFill();
-            var ob = openBtn.AddComponent<Button>();
-            ob.targetGraphic = openBtn.GetComponent<Image>();
-            ob.onClick.AddListener(OpenLoginExternally);
+            // Placeholder shown until the web page covers this area.
+            _loading = Label(inner.transform, "Loading", "載入中…", 18, Brown, TextAnchor.MiddleCenter);
+            _loading.StretchFill();
 
             return page;
         }
 
-        // ── Page switching ───────────────────────────────────────────────────
+        // ── Page switching + embedded webview ────────────────────────────────
 
         void ShowBrowser()
         {
             _desktopPage.SetActive(false);
             _browserPage.SetActive(true);
-            OpenLoginExternally();
-        }
-
-        void OpenLoginExternally()
-        {
-            Application.OpenURL(LoginUrl);
-            Debug.Log("[ComputerScreenUI] opened login in external browser: " + LoginUrl);
+            EnsureWebView();
+            if (_webView != null) { _webView.SetVisibility(true); ApplyWebMargins(); }
         }
 
         void ShowDesktop()
         {
             _browserPage.SetActive(false);
             _desktopPage.SetActive(true);
+            if (_webView != null) _webView.SetVisibility(false);
+        }
+
+        void EnsureWebView()
+        {
+            if (_webView != null) return;
+            var go = new GameObject("EmbeddedWebView");
+            go.transform.SetParent(transform, false);
+            _webView = go.AddComponent<WebViewObject>();
+            _webView.Init(
+                ld: (msg) => { Debug.Log("[ComputerScreenUI] webview loaded: " + msg); if (_loading != null) _loading.gameObject.SetActive(false); },
+                err: (msg) => Debug.LogWarning("[ComputerScreenUI] webview error: " + msg),
+                httpErr: (msg) => Debug.LogWarning("[ComputerScreenUI] webview http error: " + msg),
+                enableWKWebView: true);
+            _webView.LoadURL(LoginUrl);
+            _webView.SetVisibility(false);
+        }
+
+        // Position the native/iframe webview to overlay the WebArea panel.
+        void ApplyWebMargins()
+        {
+            if (_webView == null || _webArea == null) return;
+            var c = new Vector3[4];
+            _webArea.GetWorldCorners(c); // overlay canvas -> screen pixels
+            int left   = Mathf.RoundToInt(c[0].x);
+            int bottom = Mathf.RoundToInt(c[0].y);
+            int right  = Mathf.RoundToInt(Screen.width  - c[2].x);
+            int top    = Mathf.RoundToInt(Screen.height - c[1].y);
+            _webView.SetMargins(left, top, right, bottom);
         }
 
         // ── Zoom ─────────────────────────────────────────────────────────────
@@ -311,6 +331,7 @@ namespace CathayCrossing.HD2D
             _zoom = Mathf.Clamp(z, ZoomMin, ZoomMax);
             if (_winRt != null) _winRt.localScale = new Vector3(_zoom, _zoom, 1f);
             Canvas.ForceUpdateCanvases();
+            if (_webView != null && _browserPage != null && _browserPage.activeSelf) ApplyWebMargins();
         }
 
         // ── Helpers ──────────────────────────────────────────────────────────
@@ -329,16 +350,10 @@ namespace CathayCrossing.HD2D
             go.transform.SetParent(parent, false);
             var img = go.GetComponent<Image>();
             img.color = color;
-            if (rounded)
-            {
-                img.sprite = RoundedSprite();
-                img.type = Image.Type.Sliced;
-            }
+            if (rounded) { img.sprite = RoundedSprite(); img.type = Image.Type.Sliced; }
             var rt = (RectTransform)go.transform;
-            rt.anchorMin = anchorMin;
-            rt.anchorMax = anchorMax;
-            rt.offsetMin = Vector2.zero;
-            rt.offsetMax = Vector2.zero;
+            rt.anchorMin = anchorMin; rt.anchorMax = anchorMax;
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
             return go;
         }
 
@@ -348,48 +363,36 @@ namespace CathayCrossing.HD2D
             var go = new GameObject(name, typeof(Text));
             go.transform.SetParent(parent, false);
             var t = go.GetComponent<Text>();
-            t.text = text;
-            t.font = UiFont();
-            t.fontSize = size;
-            t.fontStyle = style;
-            t.color = color;
-            t.alignment = anchor;
-            t.raycastTarget = false;
+            t.text = text; t.font = UiFont(); t.fontSize = size; t.fontStyle = style;
+            t.color = color; t.alignment = anchor; t.raycastTarget = false;
             return t;
         }
 
         static Font UiFont()
         {
-            if (_font == null)
-                _font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            if (_font == null) _font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             return _font;
         }
 
-        // Procedural rounded-rect sprite (9-sliced) for the soft AC look.
         static Sprite RoundedSprite()
         {
             if (_rounded != null) return _rounded;
-            const int s = 64;
-            const float r = 22f;
+            const int s = 64; const float r = 22f;
             var tex = new Texture2D(s, s, TextureFormat.RGBA32, false);
             tex.wrapMode = TextureWrapMode.Clamp;
             var px = new Color32[s * s];
             for (int y = 0; y < s; y++)
-            {
                 for (int x = 0; x < s; x++)
                 {
                     float dx = Mathf.Max(r - x, x - (s - 1 - r), 0f);
                     float dy = Mathf.Max(r - y, y - (s - 1 - r), 0f);
                     float d = Mathf.Sqrt(dx * dx + dy * dy);
-                    float a = Mathf.Clamp01(r - d + 0.5f); // 1px AA edge
+                    float a = Mathf.Clamp01(r - d + 0.5f);
                     px[y * s + x] = new Color(1f, 1f, 1f, a);
                 }
-            }
-            tex.SetPixels32(px);
-            tex.Apply();
+            tex.SetPixels32(px); tex.Apply();
             _rounded = Sprite.Create(tex, new Rect(0, 0, s, s), new Vector2(0.5f, 0.5f),
-                                     100f, 0, SpriteMeshType.FullRect,
-                                     new Vector4(r + 4f, r + 4f, r + 4f, r + 4f));
+                                     100f, 0, SpriteMeshType.FullRect, new Vector4(r + 4f, r + 4f, r + 4f, r + 4f));
             return _rounded;
         }
     }
@@ -399,10 +402,8 @@ namespace CathayCrossing.HD2D
         public static void StretchFill(this Text t)
         {
             var rt = t.rectTransform;
-            rt.anchorMin = Vector2.zero;
-            rt.anchorMax = Vector2.one;
-            rt.offsetMin = Vector2.zero;
-            rt.offsetMax = Vector2.zero;
+            rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
         }
     }
 }
