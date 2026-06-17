@@ -281,7 +281,7 @@ MonoBehaviour:
   openKey: 29
   openAngle: 95
   openSpeed: 220
-  range: 3.5
+  range: 1.8
   autoCloseDelay: 2
   playerTag: Player
   autoAlign: 0
