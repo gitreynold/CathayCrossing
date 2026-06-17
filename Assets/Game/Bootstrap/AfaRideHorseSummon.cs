@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 namespace CathayCrossing.Bootstrap
 {
@@ -32,6 +33,10 @@ namespace CathayCrossing.Bootstrap
         [Tooltip("How far in front of the player the horse parks itself.")]
         public float stopDistanceInFront = 1.6f;
         public float arriveThreshold = 0.2f;
+        [Tooltip("If, mid-lap, the horse's angle around the player comes within " +
+                 "this many degrees of the player's front, it stops circling and " +
+                 "settles in front right away — no full lap required.")]
+        [Range(1f, 90f)] public float frontAngleTolerance = 20f;
         [Tooltip("Normalized time of the gallop clip to freeze on when parked — " +
                  "chosen so all four hooves are planted on the ground.")]
         [Range(0f, 1f)] public float idleFreezePoint = 0.75f;
@@ -87,7 +92,8 @@ namespace CathayCrossing.Bootstrap
             float dt = Mathf.Min(Time.deltaTime, 0.05f);
             _stateTime += dt;
 
-            if (Input.GetKeyDown(KeyCode.R))
+            var kb = Keyboard.current;
+            if (kb != null && kb.rKey.wasPressedThisFrame)
             {
                 if (_state == State.Wander)
                 {
@@ -159,6 +165,20 @@ namespace CathayCrossing.Bootstrap
                     }
 
                     MoveTowards(RingPoint(_angle), dt, runSpeed * 1.5f);
+
+                    // Short-circuit: if the horse is already in front of the
+                    // player, settle there now instead of finishing the lap.
+                    Vector3 frontDir = Flat(PlayerFacing());
+                    if (frontDir.sqrMagnitude > 0.01f)
+                    {
+                        float frontAngle = Mathf.Atan2(frontDir.z, frontDir.x) * Mathf.Rad2Deg;
+                        float curAngle   = PolarAngle() * Mathf.Rad2Deg;
+                        if (Mathf.Abs(Mathf.DeltaAngle(curAngle, frontAngle)) <= frontAngleTolerance)
+                        {
+                            Begin(State.ToFront);
+                            break;
+                        }
+                    }
 
                     if (_swept >= Mathf.PI * 2f || _stateTime > circleTimeout)
                         Begin(State.ToFront);

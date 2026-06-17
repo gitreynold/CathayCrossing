@@ -110,6 +110,7 @@ namespace CathayCrossing.HD2D
         // we can suppress movement while the character is mid-performance.
         static readonly int WavingStateHash = Animator.StringToHash("Waving");
         static readonly int DanceStateHash  = Animator.StringToHash("Dance");
+        static readonly int WhistleStateHash = Animator.StringToHash("Whistle");
         // Seated states — used to keep movement/actions locked through the
         // whole sit-down / seated / typing / stand-up sequence.
         static readonly int SitDownStateHash   = Animator.StringToHash("SitDown");
@@ -615,18 +616,21 @@ void UpdateApproach()
         }
 
         // True while the Animator is in (or transitioning into) any one-shot
-        // action state — currently Waving or Dance — on the base layer.
-        // Movement and rotation are suppressed for that window so the player
-        // doesn't slide while greeting or dancing.
+        // action state — currently Waving, Dance, or Whistle — on the base
+        // layer. Movement and rotation are suppressed for that window so the
+        // player doesn't slide while greeting, dancing, or whistling for the
+        // horse.
         bool IsPerformingAction()
         {
             if (animator == null) return false;
             var cur = animator.GetCurrentAnimatorStateInfo(0);
-            if (cur.shortNameHash == WavingStateHash || cur.shortNameHash == DanceStateHash) return true;
+            if (cur.shortNameHash == WavingStateHash || cur.shortNameHash == DanceStateHash
+                || cur.shortNameHash == WhistleStateHash) return true;
             if (animator.IsInTransition(0))
             {
                 var nxt = animator.GetNextAnimatorStateInfo(0);
-                if (nxt.shortNameHash == WavingStateHash || nxt.shortNameHash == DanceStateHash) return true;
+                if (nxt.shortNameHash == WavingStateHash || nxt.shortNameHash == DanceStateHash
+                    || nxt.shortNameHash == WhistleStateHash) return true;
             }
             return false;
         }
