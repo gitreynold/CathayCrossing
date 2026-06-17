@@ -5,7 +5,8 @@
         "Unity.InputSystem",
         "Unity.RenderPipelines.Universal.Runtime",
         "Unity.RenderPipelines.Core.Runtime",
-        "Unity.TextMeshPro"
+        "Unity.TextMeshPro",
+        "unity-webview"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
