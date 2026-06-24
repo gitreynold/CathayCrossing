@@ -316,6 +316,12 @@ namespace CathayCrossing.Bootstrap
             var anim = _player.GetComponentInChildren<Animator>();
             if (anim != null && anim.runtimeAnimatorController != null)
                 anim.SetTrigger("Whistle");
+
+            // Play the whistle SFX (louder than the scene BGM) alongside the
+            // animation. The controller owns the 2D AudioSource.
+            var ctrl = _player.GetComponentInChildren<CathayCrossing.HD2D.OctopathPlayerController>();
+            if (ctrl == null) ctrl = _player.GetComponentInParent<CathayCrossing.HD2D.OctopathPlayerController>();
+            if (ctrl != null) ctrl.PlayWhistleSfx();
         }
 
         static Transform FindPlayer()

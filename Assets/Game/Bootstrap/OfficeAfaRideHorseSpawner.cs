@@ -139,6 +139,10 @@ namespace CathayCrossing.Bootstrap
                 summon.visualYawOffset = visualYawOffset;
                 summon.runSpeed = moveSpeed * 1.15f;
 
+                // Looping 3D gallop SFX — louder the closer the camera gets,
+                // and only audible while the horse is actually moving.
+                npc.AddComponent<HorseGallopAudio>();
+
                 SceneManager.MoveGameObjectToScene(npc, scene);
             }
 

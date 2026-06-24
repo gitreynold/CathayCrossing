@@ -50,6 +50,33 @@ namespace CathayCrossing.HD2D
                  "is not assigned in the inspector.")]
         public string danceMusicResourcePath = "Audio/Velvet_Sidewalk_Dance";
         AudioSource _danceAudio;
+        // Dance-music watchdog state. While _danceMusicActive is true the
+        // controller tracks the Animator's Dance state each frame so it can cut
+        // the track the moment another action (wave/whistle/sit/…) interrupts
+        // the dance. A dance that runs to its natural end is left to finish.
+        bool  _danceMusicActive;
+        bool  _danceStateReached;
+        float _danceLastNorm;
+        float _danceWatchGrace;
+        [Tooltip("How far into the Dance clip (0–1) still counts as 'cancelled' " +
+                 "if the character leaves the Dance state. Leaving past this point " +
+                 "is treated as a natural finish and the music tail is allowed to " +
+                 "play out.")]
+        [Range(0f, 1f)] public float danceCancelThreshold = 0.9f;
+
+        [Header("Whistle SFX")]
+        [Tooltip("One-shot whistle sound played when this character whistles to " +
+                 "summon the horse (R key, via AfaRideHorseSummon). Auto-loaded " +
+                 "from Resources/Audio/Calling_Whistle when left null. 2D source " +
+                 "so it sits on top of the scene BGM.")]
+        public AudioClip whistleSfx;
+        [Tooltip("Volume for the whistle SFX. Kept above the scene BGM (0.6) so " +
+                 "it clearly stands out.")]
+        [Range(0f, 1f)] public float whistleVolume = 1f;
+        [Tooltip("Resources path the whistle clip is loaded from when whistleSfx " +
+                 "is not assigned in the inspector.")]
+        public string whistleResourcePath = "Audio/Calling_Whistle";
+        AudioSource _whistleAudio;
 
         [Header("Sit / Typing")]
         [Tooltip("Toggle key: from standing → sit down (and stay seated); " +
@@ -164,6 +191,7 @@ namespace CathayCrossing.HD2D
             }
 
             SetupDanceAudio();
+            SetupWhistleAudio();
         }
 
         // Build the dedicated 2D AudioSource that plays the dance track. The
@@ -197,10 +225,110 @@ namespace CathayCrossing.HD2D
             if (_danceAudio == null || _danceAudio.clip == null) return;
             _danceAudio.volume = danceMusicVolume;
             _danceAudio.Play();
+            // Arm the watchdog so MonitorDanceMusic() can cut the track if the
+            // dance is cancelled before it finishes.
+            _danceMusicActive  = true;
+            _danceStateReached = false;
+            _danceLastNorm     = 0f;
+            _danceWatchGrace   = 0f;
+        }
+
+        // True while the Animator is in (or transitioning into) the Dance state.
+        // Reports the clip's normalized playback position so the watchdog can
+        // tell an early cancel from a natural finish.
+        bool IsInDanceState(out float normalizedTime)
+        {
+            normalizedTime = 0f;
+            if (animator == null) return false;
+            var cur = animator.GetCurrentAnimatorStateInfo(0);
+            if (cur.shortNameHash == DanceStateHash)
+            {
+                normalizedTime = cur.normalizedTime;
+                return true;
+            }
+            if (animator.IsInTransition(0))
+            {
+                var nxt = animator.GetNextAnimatorStateInfo(0);
+                if (nxt.shortNameHash == DanceStateHash)
+                {
+                    normalizedTime = nxt.normalizedTime;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // Cuts the dance music when the dance is interrupted by another action.
+        // Lets a dance that reaches its natural end keep its short music tail.
+        void MonitorDanceMusic()
+        {
+            if (!_danceMusicActive) return;
+            if (_danceAudio == null) { _danceMusicActive = false; return; }
+
+            bool inDance = IsInDanceState(out float norm);
+            if (inDance)
+            {
+                _danceStateReached = true;
+                _danceLastNorm     = norm;
+                return;
+            }
+
+            if (!_danceStateReached)
+            {
+                // Still blending into the Dance state right after the trigger —
+                // wait briefly before deciding anything.
+                _danceWatchGrace += Time.deltaTime;
+                if (_danceWatchGrace > 0.5f) _danceMusicActive = false; // safety
+                return;
+            }
+
+            // We were dancing and have now left the Dance state. If we left
+            // before the clip's tail, another action cancelled it → cut the
+            // music. Otherwise it finished naturally → leave the tail playing.
+            if (_danceLastNorm < danceCancelThreshold && _danceAudio.isPlaying)
+                _danceAudio.Stop();
+
+            _danceMusicActive = false;
+        }
+
+        // Build the dedicated 2D AudioSource for the whistle SFX. Mirrors the
+        // dance-audio setup: created in code because the player is assembled at
+        // runtime with no prefab, clip pulled from Resources when unset.
+        void SetupWhistleAudio()
+        {
+            if (whistleSfx == null && !string.IsNullOrEmpty(whistleResourcePath))
+            {
+                whistleSfx = Resources.Load<AudioClip>(whistleResourcePath);
+                if (whistleSfx == null)
+                {
+                    Debug.LogWarning($"[OctopathPlayerController] Whistle SFX not found at " +
+                                     $"Resources/{whistleResourcePath}. Whistle will be silent.");
+                }
+            }
+
+            _whistleAudio = gameObject.AddComponent<AudioSource>();
+            _whistleAudio.clip         = whistleSfx;
+            _whistleAudio.loop         = false;
+            _whistleAudio.playOnAwake  = false;
+            _whistleAudio.spatialBlend = 0f;            // 2D — sits on top of the BGM
+            _whistleAudio.volume       = whistleVolume; // > BGM (0.6)
+        }
+
+        // Public hook fired by AfaRideHorseSummon when the player whistles to
+        // summon the horse (R key). Plays the whistle SFX from the top.
+        public void PlayWhistleSfx()
+        {
+            if (_whistleAudio == null || _whistleAudio.clip == null) return;
+            _whistleAudio.volume = whistleVolume;
+            _whistleAudio.Play();
         }
 
         void Update()
         {
+            // Runs for both local and remote avatars so anyone's dance music is
+            // cut when their dance is interrupted.
+            MonitorDanceMusic();
+
             if (isLocalPlayer)
             {
                 UpdateLocalPlayer();
