@@ -37,6 +37,20 @@ namespace CathayCrossing.HD2D
         [Tooltip("Key that fires the 'Dance' trigger on the Animator.")]
         public Key danceKey = Key.F;
 
+        [Header("Dance Music")]
+        [Tooltip("One-shot track that plays whenever this character dances. " +
+                 "Auto-loaded from Resources/Audio/Velvet_Sidewalk_Dance when " +
+                 "left null. Plays as a 2D source so it sits on top of the scene " +
+                 "BGM regardless of distance.")]
+        public AudioClip danceMusic;
+        [Tooltip("Volume for the dance music. Kept above the scene BGM (0.6) so " +
+                 "it clearly stands out while dancing.")]
+        [Range(0f, 1f)] public float danceMusicVolume = 1f;
+        [Tooltip("Resources path the dance clip is loaded from when danceMusic " +
+                 "is not assigned in the inspector.")]
+        public string danceMusicResourcePath = "Audio/Velvet_Sidewalk_Dance";
+        AudioSource _danceAudio;
+
         [Header("Sit / Typing")]
         [Tooltip("Toggle key: from standing → sit down (and stay seated); " +
                  "while seated → stand back up. All other movement/action keys " +
@@ -148,6 +162,41 @@ namespace CathayCrossing.HD2D
                 _controller.minMoveDistance = 0f;
                 _controller.stepOffset = 0.2f;
             }
+
+            SetupDanceAudio();
+        }
+
+        // Build the dedicated 2D AudioSource that plays the dance track. The
+        // player is assembled entirely in code by OfficePlayerSpawner (no
+        // prefab), so we create the source here and pull the clip from
+        // Resources when the inspector field is empty.
+        void SetupDanceAudio()
+        {
+            if (danceMusic == null && !string.IsNullOrEmpty(danceMusicResourcePath))
+            {
+                danceMusic = Resources.Load<AudioClip>(danceMusicResourcePath);
+                if (danceMusic == null)
+                {
+                    Debug.LogWarning($"[OctopathPlayerController] Dance music not found at " +
+                                     $"Resources/{danceMusicResourcePath}. Dance will be silent.");
+                }
+            }
+
+            _danceAudio = gameObject.AddComponent<AudioSource>();
+            _danceAudio.clip          = danceMusic;
+            _danceAudio.loop          = false;   // 18s one-shot, ~matches the 17.3s dance clip
+            _danceAudio.playOnAwake   = false;
+            _danceAudio.spatialBlend  = 0f;      // 2D — sits on top of the BGM
+            _danceAudio.volume        = danceMusicVolume; // > BGM (0.6)
+        }
+
+        // Plays the dance track from the top. Restarts cleanly if the player
+        // re-triggers a dance before the previous track finishes.
+        void PlayDanceMusic()
+        {
+            if (_danceAudio == null || _danceAudio.clip == null) return;
+            _danceAudio.volume = danceMusicVolume;
+            _danceAudio.Play();
         }
 
         void Update()
@@ -303,6 +352,7 @@ namespace CathayCrossing.HD2D
             if (kb != null && kb[danceKey].wasPressedThisFrame)
             {
                 animator.SetTrigger(DanceHash);
+                PlayDanceMusic();
                 CathayCrossing.Network.NetworkManager.Instance?.SendAction("DANCE");
             }
         }
@@ -572,7 +622,10 @@ void UpdateApproach()
         public void Dance()
         {
             // Public hook so UI buttons / NPC interactions can also trigger Dance.
+            // Also drives the remote-player path (NetworkManager calls this on
+            // other players' avatars), so their dance music plays locally too.
             if (animator != null) animator.SetTrigger(DanceHash);
+            PlayDanceMusic();
         }
 
         // ─── Public seated hooks (used by NetworkManager for remote players
