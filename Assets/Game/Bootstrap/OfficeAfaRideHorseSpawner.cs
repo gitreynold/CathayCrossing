@@ -21,7 +21,7 @@ namespace CathayCrossing.Bootstrap
 
         [Tooltip("Spawn near the player's position instead of a random floor tile.")]
         public bool spawnAtPlayer = true;
-        public float spawnOffsetFromPlayer = 2.4f;
+        public float spawnOffsetFromPlayer = 1.4f;
 
         const string NpcObjectPrefix = "__OfficeNpc_AfaRideHorse";
         const string FbxResource     = "NPC/AfaRideHorse/afa_ride_horse";
@@ -84,9 +84,13 @@ namespace CathayCrossing.Bootstrap
                 float sx, sz;
                 if (haveAnchor)
                 {
-                    float a = Random.value * Mathf.PI * 2f;
-                    sx = anchor.x + Mathf.Cos(a) * spawnOffsetFromPlayer;
-                    sz = anchor.z + Mathf.Sin(a) * spawnOffsetFromPlayer;
+                    // Start right beside the player's spawn spot (the office
+                    // centre / doorway shown on screen) with a FIXED offset so
+                    // the placement is deterministic and the horse doesn't stack
+                    // on Snoopy. NpcWanderController then roams from here.
+                    const float ang = 330f * Mathf.Deg2Rad; // back-right of the player
+                    sx = anchor.x + Mathf.Cos(ang) * spawnOffsetFromPlayer;
+                    sz = anchor.z + Mathf.Sin(ang) * spawnOffsetFromPlayer;
                     sx = Mathf.Clamp(sx, floor.min.x + 1.5f, floor.max.x - 1.5f);
                     sz = Mathf.Clamp(sz, floor.min.z + 1.5f, floor.max.z - 1.5f);
                 }

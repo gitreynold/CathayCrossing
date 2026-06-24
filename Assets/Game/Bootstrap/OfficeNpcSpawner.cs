@@ -23,7 +23,7 @@ namespace CathayCrossing.Bootstrap
         [Tooltip("Spawn Snoopy at the player's spawn position (the spot shown on screen) instead of a random floor tile. It still wanders randomly from there.")]
         public bool spawnAtPlayer = true;
         [Tooltip("How far to the side of the player Snoopy appears, so they don't overlap on spawn.")]
-        public float spawnOffsetFromPlayer = 1.8f;
+        public float spawnOffsetFromPlayer = 1.4f;
 
         const string NpcObjectPrefix = "__OfficeNpc_Snoopy";
         const string FbxResource     = "NPC/Snoopy/Snoopy";
@@ -89,11 +89,13 @@ namespace CathayCrossing.Bootstrap
                 float sx, sz;
                 if (haveAnchor)
                 {
-                    // Sit just to the side of the player so they don't overlap,
-                    // then let NpcWanderController roam from here.
-                    float a = Random.value * Mathf.PI * 2f;
-                    sx = anchor.x + Mathf.Cos(a) * spawnOffsetFromPlayer;
-                    sz = anchor.z + Mathf.Sin(a) * spawnOffsetFromPlayer;
+                    // Start right beside the player's spawn spot (the office
+                    // centre / doorway shown on screen) with a FIXED offset so
+                    // the placement is deterministic and Snoopy doesn't stack on
+                    // the horse. NpcWanderController then roams from here.
+                    const float ang = 210f * Mathf.Deg2Rad; // back-left of the player
+                    sx = anchor.x + Mathf.Cos(ang) * spawnOffsetFromPlayer;
+                    sz = anchor.z + Mathf.Sin(ang) * spawnOffsetFromPlayer;
                     // Keep inside the floor so we don't land in a wall.
                     sx = Mathf.Clamp(sx, floor.min.x + 1.5f, floor.max.x - 1.5f);
                     sz = Mathf.Clamp(sz, floor.min.z + 1.5f, floor.max.z - 1.5f);
