@@ -91,7 +91,8 @@ void Update()
         {
             var kb = Keyboard.current;
             // O only OPENS, and only while the door is currently closed.
-            if (!_open && kb != null && kb[openKey].wasPressedThisFrame)
+            // Typing in the chat input must not trigger the door.
+            if (!_open && kb != null && kb[openKey].wasPressedThisFrame && !ChatInputUI.IsTyping)
             {
                 var player = GameObject.FindWithTag(playerTag);
                 if (player != null)

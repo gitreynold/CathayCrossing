@@ -93,7 +93,9 @@ namespace CathayCrossing.Bootstrap
             _stateTime += dt;
 
             var kb = Keyboard.current;
-            if (kb != null && kb.rKey.wasPressedThisFrame)
+            // 聊天輸入中按 R 是在打字，不觸發召喚
+            if (kb != null && kb.rKey.wasPressedThisFrame
+                && !CathayCrossing.HD2D.ChatInputUI.IsTyping)
             {
                 if (_state == State.Wander)
                 {

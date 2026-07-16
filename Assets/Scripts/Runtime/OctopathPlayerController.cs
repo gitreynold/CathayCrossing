@@ -360,7 +360,9 @@ namespace CathayCrossing.HD2D
             // sequence (sit-down → seated → typing → stand-up).
             HandleSeatedInput();
 
-            if (IsPerformingAction() || _seatedLocked)
+            // 聊天輸入框開著時（ChatInputUI.IsTyping），WASD 是在打字，
+            // 不能變成移動 —— 跟動作中/就座中一樣把輸入歸零。
+            if (IsPerformingAction() || _seatedLocked || ChatInputUI.IsTyping)
             {
                 input         = Vector2.zero;
                 _runningInput = false;
@@ -467,9 +469,9 @@ namespace CathayCrossing.HD2D
             animator.SetBool(IsRunningHash, _runningInput);
 
             // Wave/Dance are locked out while seated (or transitioning in/out
-            // of the seat). Only G (stand up) and O (typing) work then — those
-            // are handled in HandleSeatedInput().
-            if (_seatedLocked) return;
+            // of the seat) and while typing in the chat input. Only G (stand
+            // up) and O (typing) work when seated — handled in HandleSeatedInput().
+            if (_seatedLocked || ChatInputUI.IsTyping) return;
 
             var kb = Keyboard.current;
             if (kb != null && kb[greetKey].wasPressedThisFrame)
@@ -497,10 +499,10 @@ void HandleSeatedInput()
         {
             if (animator == null) { _seatedLocked = false; return; }
 
-            // While the computer screen UI is open, swallow ALL action keys so
-            // typing into the embedded web page can't trigger sit/stand/etc.
-            // The UI itself is closed with ESC or its ✕ button.
-            if (ComputerScreenUI.IsOpen)
+            // While the computer screen UI or the chat input is open, swallow
+            // ALL action keys so typing can't trigger sit/stand/etc.
+            // The UIs close themselves with ESC (or ✕ / Enter).
+            if (ComputerScreenUI.IsOpen || ChatInputUI.IsTyping)
             {
                 _seatedLocked = _approaching || _sitMode || IsInSeatedState();
                 return;

@@ -27,7 +27,8 @@ namespace CathayCrossing.Bootstrap
             // spawner's 180° room flip + furniture colliders are in place.
             infra.AddComponent<OfficeNpcSpawner>();
             infra.AddComponent<OfficeAfaRideHorseSpawner>();
-            Debug.Log($"[{InfraName}] Spawned. SceneSwitcher + OfficeDoorSpawner + OfficePlayerSpawner + OfficeNpcSpawner + OfficeAfaRideHorseSpawner online.");
+            infra.AddComponent<NetworkChatBootstrap>();
+            Debug.Log($"[{InfraName}] Spawned. SceneSwitcher + OfficeDoorSpawner + OfficePlayerSpawner + OfficeNpcSpawner + OfficeAfaRideHorseSpawner + NetworkChatBootstrap online.");
         }
     }
 }
